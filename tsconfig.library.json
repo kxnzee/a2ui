@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src/a2ui",
+    "outDir": "dist/lib/types"
+  },
+  "include": ["src/a2ui"],
+  "exclude": ["tests", "src/demo"]
+}
