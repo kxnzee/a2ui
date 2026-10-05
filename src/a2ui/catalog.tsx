@@ -7,17 +7,21 @@ import { OptionSchema } from './contract.js';
 export const CATALOG_ID = 'urn:kxnzee:a2ui:cards:v1';
 export const SURFACE_ID = 'agent-card';
 
+const writablePath = (value: unknown) => typeof value === 'object' && value !== null &&
+  'path' in value && typeof value.path === 'string' && value.path.startsWith('/') && value.path !== '/';
+
 export const ClarificationApi = {
   name: 'ClarificationCard',
   schema: z.object({
-    question: z.string(),
-    options: z.array(OptionSchema),
-    selected: CommonSchemas.DynamicString,
-    disabled: CommonSchemas.DynamicBoolean,
-    answered: CommonSchemas.DynamicBoolean,
-    error: CommonSchemas.DynamicString,
+    questionId: z.string().min(1).max(100),
+    question: z.string().trim().min(1).max(600),
+    options: z.array(OptionSchema).min(2).max(6).refine(options => new Set(options.map(o => o.id)).size === options.length, 'ID вариантов должны быть уникальны'),
+    selected: CommonSchemas.DynamicString.refine(writablePath, 'selected требует абсолютный data binding'),
+    disabled: CommonSchemas.DynamicBoolean.refine(writablePath, 'disabled требует абсолютный data binding'),
+    answered: CommonSchemas.DynamicBoolean.refine(writablePath, 'answered требует абсолютный data binding'),
+    error: CommonSchemas.DynamicString.refine(writablePath, 'error требует абсолютный data binding'),
     onSelect: CommonSchemas.Action,
-  }).strict(),
+  }).strict().describe('Уточнение с 2–6 вариантами. Используй, когда нужен выбор пользователя. selected, disabled, answered, error должны быть data bindings; onSelect — событие clarification_answer с questionId и optionId.'),
 };
 
 const ClarificationCard = createComponentImplementation(ClarificationApi, ({ props }) => (
@@ -51,8 +55,8 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
 export const MetricApi = {
   name: 'MetricCard',
   schema: z.object({
-    title: z.string(), value: z.number().finite(), unit: z.string().optional(),
-  }).strict(),
+    title: z.string().trim().min(1).max(160), value: z.number().finite(), unit: z.string().trim().min(1).max(24).optional(),
+  }).strict().describe('Одно известное числовое значение с названием и необязательной единицей. Не выдумывай значение; если данных нет, запроси их. Не имеет события выбора.'),
 };
 
 const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
@@ -62,7 +66,14 @@ const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
   </Card>
 ));
 
-// type → зарегистрированная реализация выбирается контроллером явно.
+export const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
+Каждому новому вопросу нужен новый questionId. ID вариантов должны быть уникальны.
+У ClarificationCard selected, disabled, answered, error привяжи к отдельным абсолютным путям data model. Сначала инициализируй их: selected="", disabled=false, answered=false, error="".
+onSelect — event с name="clarification_answer" и context: questionId (тот же ID), optionId (binding к selected).
+Действие клиента приходит как стандартное сообщение {version:"v0.9",action:{name,surfaceId,sourceComponentId,timestamp,context}}. После выбора продолжи задачу.
+Корневой компонент имеет id="root". Можно обновлять существующие поверхности; удаляй завершённую карточку через deleteSurface, если она больше не нужна.`;
+
+// Одна регистрация служит renderer, валидации и экспорту JSON Schema агенту.
 export const a2uiCatalog = new Catalog(
-  CATALOG_ID, 'v0.9', [ClarificationCard, MetricCard], [],
+  CATALOG_ID, 'v0.9', [ClarificationCard, MetricCard], [], undefined, CATALOG_INSTRUCTIONS,
 );

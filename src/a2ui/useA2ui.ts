@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { createA2uiController, type AnswerHandler } from './controller.js';
+import { createA2uiController, type ActionHandler } from './controller.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
 export type A2uiResponseOptions = Pick<StreamOptions, 'onText' | 'onError'>;
@@ -10,9 +10,9 @@ export type A2uiResponse = {
 };
 
 // Только A2UI: нет запроса, состояния чата, истории сообщений или транспорта.
-export function useA2ui({ onAnswer }: { onAnswer: AnswerHandler }) {
-  const answerRef = useRef(onAnswer);
-  answerRef.current = onAnswer;
+export function useA2ui({ onAction }: { onAction: ActionHandler }) {
+  const answerRef = useRef(onAction);
+  answerRef.current = onAction;
   const mounted = useRef(true);
   const active = useRef<A2uiResponse | undefined>(undefined);
   const controller = useMemo(
@@ -25,7 +25,7 @@ export function useA2ui({ onAnswer }: { onAnswer: AnswerHandler }) {
     let ended = false;
     const decoder = createA2uiStream({
       ...options,
-      onComponent: component => controller.showComponent(component),
+      onMessage: message => controller.processMessage(message),
     });
     const response: A2uiResponse = {
       push(delta) { if (!ended) decoder.push(delta); },

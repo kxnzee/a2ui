@@ -1,12 +1,12 @@
-import { A2uiComponentSchema, type A2uiComponent } from './contract.js';
+import { A2uiMessageSchema, type A2uiMessage } from '@a2ui/web_core/v0_9';
 
-const OPEN = '<ui>';
-const CLOSE = '</ui>';
+const OPEN = '<a2ui>';
+const CLOSE = '</a2ui>';
 const MAX_BLOCK_LENGTH = 32_768;
 
 export type StreamOptions = {
   onText: (delta: string) => void;
-  onComponent: (component: A2uiComponent) => void;
+  onMessage: (message: A2uiMessage) => void;
   onError?: (error: Error) => void;
 };
 
@@ -58,8 +58,8 @@ export function createA2uiStream(options: StreamOptions) {
         buffer = buffer.slice(end + CLOSE.length);
         inside = false;
         try {
-          const component = A2uiComponentSchema.parse(JSON.parse(json));
-          options.onComponent(component);
+          const message = A2uiMessageSchema.parse(JSON.parse(json));
+          options.onMessage(message);
         } catch {
           fail('Некорректный UI-блок: проверьте JSON и схему');
         }

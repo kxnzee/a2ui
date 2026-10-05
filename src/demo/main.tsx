@@ -1,30 +1,38 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Alert, Button, Card, Checkbox, ConfigProvider, Space, Typography } from 'antd';
-import { A2uiView, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
+import { A2uiView, useA2ui, getAgentConfiguration, type A2uiActionMessage } from '../a2ui/index.js';
 import './style.css';
 
 function Demo() {
   const [text, setText] = useState('');
-  const [answer, setAnswer] = useState<ClarificationAnswer>();
+  const [answer, setAnswer] = useState<A2uiActionMessage>();
   const [error, setError] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [failSend, setFailSend] = useState(false);
   const failRef = useRef(false);
+  const generation = useRef(0);
   const cancelRef = useRef<() => void>(() => {});
   failRef.current = failSend;
-  const a2ui = useA2ui({ onAnswer: async selected => {
-    // Здесь подключается уже существующий запрос приложения.
+  const a2ui = useA2ui({ onAction: async message => {
+    const current = generation.current;
     await new Promise(resolve => setTimeout(resolve, 400));
-    if (a2ui.controller.getQuestionId() !== selected.questionId) return;
+    if (current !== generation.current) return;
     if (failRef.current) throw new Error('Демонстрационная ошибка');
-    setAnswer(selected);
-    const metric = selected.optionId === 'revenue'
-      ? { title: 'Выручка', value: 1250000, unit: '₽' }
-      : { title: 'Количество заказов', value: 320, unit: 'шт.' };
-    // Тестовые цифры эмулятора, не данные реального агента.
-    play(`Демонстрационные данные: «${selected.label}».\n<ui>${JSON.stringify({ type: 'metric', props: metric })}</ui>`);
+    setAnswer(message);
+    const metricMessages = getAgentConfiguration().examples.metric;
+    const update = metricMessages[1];
+    if ('updateComponents' in update && message.action.context.optionId === 'orders') {
+      Object.assign(update.updateComponents.components[0], { title: 'Количество заказов', value: 320, unit: 'шт.' });
+    }
+    const messages = [
+      { version: 'v0.9', deleteSurface: { surfaceId: message.action.surfaceId } }, ...metricMessages,
+    ];
+    play(`Демонстрационные данные.\n${frame(messages)}`);
   } });
+  function frame(messages: unknown[]) {
+    return messages.map(message => `<a2ui>${JSON.stringify(message)}</a2ui>`).join('\n');
+  }
 
   function play(response: string) {
     cancelRef.current();
@@ -52,11 +60,8 @@ function Demo() {
   function start() {
     a2ui.clear();
     setAnswer(undefined);
-    const question = {
-      questionId: `metric-${Date.now()}`, question: 'Какой показатель показать на графике?',
-      options: [{ id: 'revenue', label: 'Выручка' }, { id: 'orders', label: 'Количество заказов' }],
-    };
-    play(`Уточню один момент.\n<ui>${JSON.stringify({ type: 'clarification', props: question })}</ui>`);
+    generation.current++;
+    play(`Уточню один момент.\n${frame(getAgentConfiguration().examples.clarification)}`);
   }
 
   return <ConfigProvider theme={{ token: { colorPrimary: '#3458d6', borderRadius: 12 } }}>

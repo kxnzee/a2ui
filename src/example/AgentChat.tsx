@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { A2uiView, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
+import { A2uiView, useA2ui, type A2uiActionMessage } from '../a2ui/index.js';
 
-// Это интерфейс адаптера к вашему существующему запросу, не HTTP-клиент.
+// Адаптер к уже существующему POST / стриму. URL и HTTP здесь не реализованы.
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 type Send = (
-  input: string | ClarificationAnswer,
+  body: { messages: ChatMessage[]; stream: boolean },
   callbacks: {
     onTextDelta: (delta: string) => void;
     onDone: () => void;
+    onResponse: (assistantContent: string) => void;
     onError: (error: Error) => void;
   },
 ) => { accepted: Promise<void>; cancel: () => void };
 
 // Только пример чата. Для переноса нужен лишь каталог src/a2ui.
-export function AgentChat({ send }: { send: Send }) {
+export function AgentChat({ send, messages, stream = true }: {
+  send: Send; messages: ChatMessage[]; stream?: boolean;
+}) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const cancelRequest = useRef<(() => void) | undefined>(undefined);
-  const requestRef = useRef<(input: string | ClarificationAnswer) => Promise<void>>(async () => {});
-  const a2ui = useA2ui({ onAnswer: answer => requestRef.current(answer) });
+  const requestRef = useRef<(input: string | A2uiActionMessage) => Promise<void>>(async () => {});
+  const a2ui = useA2ui({ onAction: answer => requestRef.current(answer) });
 
   requestRef.current = async input => {
     cancelRequest.current?.();
@@ -29,9 +33,12 @@ export function AgentChat({ send }: { send: Send }) {
     });
     let cancelled = false;
     try {
-      const request = send(input, {
+      const content = typeof input === 'string' ? input : JSON.stringify(input);
+      const request = send({ messages: [...messages, { role: 'user', content }], stream }, {
         onTextDelta: response.push,
         onDone: response.finish,
+        // Для обычного POST тот же декодер принимает полный assistant.content.
+        onResponse: content => { response.push(content); response.finish(); },
         onError: e => {
           response.cancel();
           if (!cancelled) setError(e.message);
