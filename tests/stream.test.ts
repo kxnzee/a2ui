@@ -42,3 +42,43 @@ test('full assistant content from nonstreaming POST uses the same decoder', () =
   s.push(`Готово. ${frame(metrics)}`); s.finish();
   assert.equal(visible, 'Готово. '); assert.deepEqual(messages, metrics);
 });
+
+test('cancellation from callbacks stops the remainder of the same chunk', () => {
+  for (const callback of ['text', 'message', 'error']) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({
+      onText(text) { texts.push(text); if (callback === 'text') s.cancel(); },
+      onMessage(message) { messages.push(message); if (callback === 'message') s.cancel(); },
+      onError(error) { errors.push(error); if (callback === 'error') s.cancel(); },
+    });
+    const prefix = callback === 'text' ? 'Начало' : callback === 'error' ? '<a2ui>{</a2ui>' : '';
+    s.push(`${prefix}${frame(metrics)}Конец`); s.finish();
+    assert.equal(messages.length, callback === 'message' ? 1 : 0);
+    assert.deepEqual(texts, callback === 'text' ? ['Начало'] : []);
+    assert.equal(errors.length, callback === 'error' ? 1 : 0);
+  }
+});
+
+test('protocol and processing errors retain their cause and are observable without onError', () => {
+  const errors: Error[] = []; const cause = new Error('Неизвестный каталог');
+  const s = createA2uiStream({ onText() {}, onMessage() { throw cause; }, onError: error => errors.push(error) });
+  s.push(frame([metrics[0]]));
+  assert.match(errors[0].message, /обработать сообщение A2UI/);
+  assert.equal(errors[0].cause, cause);
+  const invalid = createA2uiStream({ onText() {}, onMessage() {} });
+  assert.throws(() => invalid.push('<a2ui>{</a2ui>'), /Некорректный UI-блок/);
+  const incomplete = createA2uiStream({ onText() {}, onMessage() {} });
+  incomplete.push('<a2ui>{');
+  assert.throws(() => incomplete.finish(), /до закрытия/);
+});
+
+test('a throwing error callback is invoked once and valid frames still follow recoverable errors', () => {
+  const cause = new Error('Ошибка приложения'); let calls = 0;
+  const s = createA2uiStream({ onText() {}, onMessage() {}, onError() { calls++; throw cause; } });
+  assert.throws(() => s.push('<a2ui>{</a2ui>'), error => error === cause);
+  assert.equal(calls, 1);
+  const messages: unknown[] = []; const errors: Error[] = [];
+  const recovery = createA2uiStream({ onText() {}, onMessage: message => messages.push(message), onError: error => errors.push(error) });
+  recovery.push(`<a2ui>{</a2ui>${frame(metrics)}`); recovery.finish();
+  assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+});

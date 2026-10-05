@@ -12,6 +12,7 @@
 | useA2ui.ts | Lifecycle processor и подключение текстового декодера |
 | stream.ts | Обрамление `<a2ui>` для выбранного смешанного текстового транспорта |
 | agent.ts | Экспорт каталога, схемы протокола, capabilities и инструкций модели |
+| index.ts | Публичные экспорты модуля |
 
 Официальный подход: [React renderer README](https://github.com/a2ui-project/a2ui/blob/main/renderers/react/README.md) и [протокол v0.9](https://a2ui.org/specification/v0.9-a2ui/). Реализация проверяется с закреплённым `@a2ui/react` 0.9.1 и `@a2ui/web_core` 0.11.0. Обработку сообщений, state поверхностей, binding и формирование действий выполняет SDK. Собственного контроллера, store или менеджера отправки карточек нет.
 
@@ -23,10 +24,13 @@ import { useA2ui, A2uiView } from './features/a2ui';
 const a2ui = useA2ui({
   onAction: message => existingSendToAgent(message),
 });
-const response = a2ui.beginResponse({
-  onText: appendVisibleText,
-  onError: showChatError,
-});
+// Вызывайте при начале ответа агента, а не во время рендера.
+function beginAgentReply() {
+  return a2ui.beginResponse({
+    onText: appendVisibleText,
+    onError: showChatError,
+  });
+}
 // Stream: onTextDelta → response.push, onDone → response.finish.
 // POST: response.push(assistant.content); response.finish().
 // Отмена или ошибка транспорта: response.cancel().
@@ -48,7 +52,7 @@ ClarificationCard: question, options, selected, onSelect, необязатель
 
 getAgentConfiguration возвращает catalogSchema, protocolSchema, capabilities и instructions. Передайте их существующей интеграции модели. Реестр React сам не меняет prompt. Добавляя компонент, определите Zod-схему с description, реализацию createComponentImplementation и включите её в Catalog. Затем повторите export:agent.
 
-Примеры находятся в src/demo/messages.ts; скрипт export:agent сохраняет их отдельно в dist/agent/examples.json. Они не входят в UI-модуль. Переносите весь dist/agent для локального разрешения ссылок SDK-схем. capabilities содержит catalogId, полная схема передаётся отдельно; запрос в интернет по URI каталога не нужен.
+Примеры находятся в src/demo/messages.ts; скрипт export:agent сохраняет их отдельно в dist/agent/examples.json. Они не входят в UI-модуль. Скрипт также формирует catalog.json с $defs.anyComponent, $defs.anyFunction и $defs.theme из того же inline-каталога SDK. Это файл подключения к ссылкам протокола, а catalogSchema.json содержит исходный inline-каталог. Переносите весь dist/agent для локального разрешения ссылок SDK-схем. capabilities содержит catalogId; запрос в интернет по URI каталога не нужен.
 
 JSON Schema не сериализует все Zod refinements (например, уникальность ID вариантов и обязательность writable selected). Runtime проверяет исходные схемы; каталог не гарантирует, что LLM всегда выдаёт валидный ответ или достоверное число.
 
@@ -57,6 +61,8 @@ JSON Schema не сериализует все Zod refinements (например
 В каждом `<a2ui>JSON</a2ui>` — одно стандартное сообщение v0.9: createSurface, updateComponents, updateDataModel или deleteSurface. Теги являются выбранным обрамлением текста, не частью спецификации A2UI. Сетевой адаптер декодирует UTF-8/SSE/JSON и передаёт только текстовые дельты. Сохраняйте исходный assistant.content с блоками в истории; видимый текст берите из onText.
 
 Декодер проверяет конверт схемой A2uiMessageSchema SDK, processor проверяет свойства зарегистрированных компонентов. В web_core 0.11 нет STRICT_VALIDATION. Для JSON-ответов вне декодера проверяйте массив через A2uiMessageListSchema.parse перед processMessages. Неизвестный тип компонента SDK отображает как Unknown component, а не отклоняет на входе. Последовательность не атомарна: ошибка не откатывает ранее принятые сообщения. Поверхности и data bindings обновляет SDK; renderer подписывается на них сам.
+
+Ошибки JSON/конверта и ошибки обработки сообщения SDK передаются в onError отдельно; исходная ошибка доступна в error.cause. Без onError декодер выбрасывает ошибку — обработайте её в своём запросе. После ошибки отдельного блока обработка следующих блоков продолжается, если callback не отменил response. Незавершённый блок обнаруживается в finish. Блок длиннее 32 768 символов останавливает декодер до конца текущего ответа. cancel/clear из callback останавливает также остаток текущего чанка.
 
 ## Изменение API в 0.5
 

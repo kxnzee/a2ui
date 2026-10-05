@@ -79,3 +79,39 @@ test('synchronous error callback still cancels the subsequently returned transpo
   });
   await assert.rejects(h.request.accepted, /sync callback/); assert.equal(cancelled, 1);
 });
+
+test('exceptions from text, final flush or history callbacks fail and cancel the request', async () => {
+  for (const stage of ['text', 'flush', 'history']) {
+    let callbacks!: Parameters<Send>[1]; let cancelled = 0; let writes = 0;
+    const errors: Error[] = [];
+    const request = sendChatRequest({
+      send(_, c) { callbacks = c; return { accepted: new Promise(() => {}), cancel() { cancelled++; } }; },
+      messages: [], stream: true, input: 'Запрос',
+      beginResponse: options => createA2uiStream({ ...options, onMessage() {} }),
+      onText() { if (stage !== 'history') throw new Error(stage); },
+      onError: error => errors.push(error),
+      onMessagesChange() { if (++writes === 2 && stage === 'history') throw new Error(stage); },
+    });
+    const rejected = assert.rejects(request.accepted, new RegExp(stage));
+    callbacks.onTextDelta(stage === 'flush' ? '<a2' : 'Ответ');
+    callbacks.onDone(); await rejected;
+    callbacks.onTextDelta('late'); callbacks.onDone();
+    assert.equal(cancelled, 1); assert.equal(errors.length, 1);
+    assert.equal(writes, stage === 'history' ? 2 : 1);
+  }
+});
+
+test('cancellation during the final text callback does not commit assistant history', async () => {
+  let callbacks!: Parameters<Send>[1]; let cancelled = 0;
+  const history: ChatMessage[][] = [];
+  const request = sendChatRequest({
+    send(_, c) { callbacks = c; return { accepted: new Promise(() => {}), cancel() { cancelled++; } }; },
+    messages: [], stream: true, input: 'Запрос',
+    beginResponse: options => createA2uiStream({ ...options, onMessage() {} }),
+    onText: () => request.cancel(), onError() { assert.fail('Cancellation is not an error'); },
+    onMessagesChange: messages => history.push(messages),
+  });
+  const rejected = assert.rejects(request.accepted, { name: 'AbortError' });
+  callbacks.onTextDelta('<a2'); callbacks.onDone(); await rejected;
+  assert.equal(cancelled, 1); assert.equal(history.length, 1);
+});

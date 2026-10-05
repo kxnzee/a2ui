@@ -69,6 +69,14 @@ test('agent configuration comes from the renderer catalog; examples stay outside
   const config = getAgentConfiguration();
   assert.equal(config.catalogSchema.catalogId, a2uiCatalog.id);
   assert.deepEqual(Object.keys(config.catalogSchema.components!).sort(), [...a2uiCatalog.components.keys()].sort());
+  const metric = config.catalogSchema.components!.MetricCard.allOf![1];
+  assert.equal(metric.properties!.title.minLength, 1);
+  assert.equal(metric.properties!.value.type, 'number');
+  assert.deepEqual(metric.required, ['component', 'title', 'value']);
+  const clarification = config.catalogSchema.components!.ClarificationCard.allOf![1];
+  assert.equal(clarification.properties!.options.minItems, 2);
+  assert.equal(clarification.properties!.selected.$ref, 'common_types.json#/$defs/DynamicString');
+  assert.equal(clarification.properties!.onSelect.$ref, 'common_types.json#/$defs/Action');
   assert.match(config.instructions, /<a2ui>/);
   assert.deepEqual(config.capabilities['v0.9']?.supportedCatalogIds, [a2uiCatalog.id]);
   assert.ok(config.protocolSchema.$defs.CreateSurfaceMessage);

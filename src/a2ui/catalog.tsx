@@ -4,21 +4,34 @@ import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
 import { createComponentImplementation } from '@a2ui/react/v0_9';
 
 const OptionSchema = z.object({
-  id: z.string().min(1).max(100), label: z.string().trim().min(1).max(160),
+  id: z.string().min(1).max(100),
+  label: z.string().trim().min(1).max(160),
 }).strict();
 
 export const CATALOG_ID = 'urn:kxnzee:a2ui:cards:v2';
 
-const writablePath = (value: unknown) => typeof value === 'object' && value !== null &&
-  'path' in value && typeof value.path === 'string' && value.path.startsWith('/') && value.path !== '/';
+function isWritablePath(value: unknown) {
+  return typeof value === 'object' && value !== null &&
+    'path' in value && typeof value.path === 'string' &&
+    value.path.startsWith('/') && value.path !== '/';
+}
+
+const OptionsSchema = z.array(OptionSchema).min(2).max(6).refine(
+  options => new Set(options.map(option => option.id)).size === options.length,
+  'ID вариантов должны быть уникальны',
+);
+
+// REF-description нужен binder SDK 0.11 для распознавания DynamicString.
+const SelectedSchema = CommonSchemas.DynamicString
+  .refine(isWritablePath, 'selected требует абсолютный data binding')
+  .describe(CommonSchemas.DynamicString.description!);
 
 export const ClarificationApi = {
   name: 'ClarificationCard',
   schema: z.object({
     question: CommonSchemas.DynamicString,
-    options: z.array(OptionSchema).min(2).max(6).refine(options => new Set(options.map(o => o.id)).size === options.length, 'ID вариантов должны быть уникальны'),
-    // Сохраняем REF-description: binder SDK 0.11 распознаёт DynamicString по нему.
-    selected: CommonSchemas.DynamicString.refine(writablePath, 'selected требует абсолютный data binding').describe(CommonSchemas.DynamicString.description!),
+    options: OptionsSchema,
+    selected: SelectedSchema,
     disabled: CommonSchemas.DynamicBoolean.optional(),
     onSelect: CommonSchemas.Action,
   }).strict().describe('Уточнение с 2–6 вариантами. selected привяжи к data model. При выборе вызывается onSelect; context действия может ссылаться на selected.'),
@@ -50,7 +63,9 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
 export const MetricApi = {
   name: 'MetricCard',
   schema: z.object({
-    title: z.string().trim().min(1).max(160), value: z.number().finite(), unit: z.string().trim().min(1).max(24).optional(),
+    title: z.string().trim().min(1).max(160),
+    value: z.number().finite(),
+    unit: z.string().trim().min(1).max(24).optional(),
   }).strict().describe('Одно известное числовое значение с названием и необязательной единицей. Не выдумывай значение; если данных нет, запроси их. Не имеет события выбора.'),
 };
 

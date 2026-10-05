@@ -12,7 +12,9 @@ dom.window.matchMedia = () => ({ matches: false, addListener() {}, removeListene
 const { frame, questionMessages, metricMessages, removeQuestion } = await import('./fixtures.js');
 const { render, renderHook, fireEvent, waitFor, act, cleanup } = await import('@testing-library/react');
 const { A2uiView, createA2uiProcessor, useA2ui } = await import('../src/a2ui/index.js');
-const { StrictMode } = await import('react');
+const { StrictMode, useState } = await import('react');
+const { AgentChat } = await import('../src/example/AgentChat.js');
+import type { ChatMessage, Send } from '../src/example/request.js';
 after(() => dom.window.close());
 
 test('AntD choices and bindings work in StrictMode; host controls disabled state', async () => {
@@ -83,4 +85,35 @@ test('web_core 0.11 renders unknown components as SDK placeholders', () => {
   } }]));
   assert.ok(view.getByText(/Unknown component:/));
   cleanup(); processor.model.dispose();
+});
+
+for (const stream of [true, false]) test(`example chat sends native card actions and shows send errors (${stream ? 'stream' : 'POST'})`, async () => {
+  const bodies: Parameters<Send>[0][] = [];
+  const content = `Уточнение: ${frame(questionMessages())}`;
+  const send: Send = (body, callbacks) => {
+    bodies.push(body);
+    if (bodies.length === 1) {
+      if (body.stream) { callbacks.onTextDelta(content); callbacks.onDone(); }
+      else callbacks.onResponse(content);
+      return { accepted: Promise.resolve(), cancel() {} };
+    }
+    return { accepted: Promise.reject(new Error('Сеть недоступна')), cancel() {} };
+  };
+  function Chat() {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    return <AgentChat send={send} messages={messages} onMessagesChange={setMessages} stream={stream} />;
+  }
+  const view = render(<StrictMode><Chat /></StrictMode>);
+  fireEvent.click(view.getByRole('button', { name: 'Запросить график' }));
+  assert.ok(view.getByText('Уточнение:'));
+  assert.equal(view.container.textContent?.includes('<a2ui>'), false);
+  fireEvent.click(view.getByRole('button', { name: 'Количество заказов' }));
+  await waitFor(() => assert.equal(view.getByRole('alert').textContent, 'Сеть недоступна'));
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].messages[1].content, content);
+  const action = JSON.parse(bodies[1].messages[2].content);
+  assert.equal(action.version, 'v0.9');
+  assert.deepEqual(action.action.context, { questionId: 'metric-1', optionId: 'orders' });
+  cleanup();
+  await act(async () => {});
 });

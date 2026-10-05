@@ -17,10 +17,10 @@ function Demo() {
   const cancelRef = useRef<() => void>(() => {});
   failRef.current = failSend;
   const a2ui = useA2ui({ onAction: async message => {
-    if (sending.current) return;
+    const surface = a2ui.processor.model.getSurface(message.action.surfaceId);
+    if (sending.current || !surface) return;
     sending.current = true;
     const current = generation.current;
-    const surface = a2ui.processor.model.getSurface(message.action.surfaceId);
     const setDisabled = (value: boolean) => {
       if (current === generation.current && a2ui.processor.model.getSurface(message.action.surfaceId) === surface) {
         a2ui.processor.processMessages([{ version: 'v0.9', updateDataModel: {
