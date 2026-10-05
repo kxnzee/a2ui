@@ -1,0 +1,55 @@
+{
+  "name": "@kxnzee/a2ui-clarification-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "React + Ant Design clarification cards for an existing streamed agent integration",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/lib/types/index.d.ts",
+      "import": "./dist/lib/index.js"
+    }
+  },
+  "files": [
+    "dist/lib",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/stream.test.ts tests/controller.test.ts tests/ui.test.tsx",
+    "build:demo": "vite build",
+    "build:lib": "vite build --config vite.library.config.ts && tsc -p tsconfig.library.json",
+    "build": "npm run build:demo && npm run build:lib",
+    "preview": "vite preview --host 127.0.0.1",
+    "package:demo": "node scripts/package-demo.mjs",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@a2ui/react": "0.12.0",
+    "@a2ui/web_core": "0.12.0",
+    "antd": "6.6.5",
+    "zod": "3.25.76"
+  },
+  "peerDependencies": {
+    "react": ">=18.2.0 <20",
+    "react-dom": ">=18.2.0 <20"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.0",
+    "@types/jsdom": "30.0.0",
+    "@types/node": "24.10.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "jsdom": "27.0.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.2"
+  }
+}
