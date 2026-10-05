@@ -11,24 +11,26 @@ Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, wri
 dom.window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false, media: '', onchange: null });
 const { frame, questionMessages, metricMessages, removeQuestion } = await import('./fixtures.js');
 const { render, renderHook, fireEvent, waitFor, act, cleanup } = await import('@testing-library/react');
-const { A2uiView, createA2uiController, useA2ui } = await import('../src/a2ui/index.js');
+const { A2uiView, createA2uiProcessor, useA2ui } = await import('../src/a2ui/index.js');
 const { StrictMode } = await import('react');
 after(() => dom.window.close());
 
-test('AntD choices emit standard action, retry on failure and render another surface', async () => {
-  const answers: unknown[] = []; let fail = true;
-  const controller = createA2uiController(message => { if (fail) throw new Error('test'); answers.push(message); });
-  questionMessages().forEach(m => controller.processMessage(m));
-  const view = render(<A2uiView controller={controller} />);
+test('AntD choices forward the SDK action; host application controls disabled state', async () => {
+  const answers: unknown[] = [];
+  const processor = createA2uiProcessor(message => { answers.push(message); });
+  processor.processMessages(questionMessages());
+  const view = render(<A2uiView processor={processor} />);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
-  await waitFor(() => assert.ok(view.getByText('Не удалось отправить ответ. Попробуйте ещё раз.')));
-  fail = false; fireEvent.click(view.getByRole('button', { name: 'Количество заказов' }));
-  await waitFor(() => assert.ok(view.getByText('Вы выбрали: Количество заказов')));
-  assert.equal(answers.length, 1);
-  assert.equal((view.getByRole('button', { name: 'Количество заказов' }) as HTMLButtonElement).disabled, true);
-  act(() => { controller.processMessage(removeQuestion); questionMessages('next').forEach(m => controller.processMessage(m)); });
+  await waitFor(() => assert.equal(answers.length, 1));
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, false);
+  assert.equal(view.queryByText('Вы выбрали: Выручка'), null);
+  act(() => processor.processMessages({ version: 'v0.9', updateDataModel: {
+    surfaceId: 'question', path: '/disabled', value: true,
+  } }));
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
+  act(() => { processor.processMessages(removeQuestion); processor.processMessages(questionMessages('next')); });
   assert.equal((view.getByRole('button', { name: 'Количество заказов' }) as HTMLButtonElement).disabled, false);
-  cleanup(); controller.dispose();
+  cleanup(); processor.dispose();
 });
 
 test('hook handles StrictMode, replacement, latest action callback, clear and unmount', async () => {
@@ -41,32 +43,32 @@ test('hook handles StrictMode, replacement, latest action callback, clear and un
   const second = hook.result.current.beginResponse({ onText: t => text.push(t) });
   act(() => { first.push(frame(questionMessages())); second.push(`Текст${frame(questionMessages())}`); second.finish(); });
   second.push('late'); assert.deepEqual(text, ['Текст']);
-  assert.equal(hook.result.current.controller.getSnapshot().length, 1);
+  assert.equal(hook.result.current.processor.getSurfaces().size, 1);
   hook.rerender({ version: 'new' });
-  const view = render(<A2uiView controller={hook.result.current.controller} />);
+  const view = render(<A2uiView processor={hook.result.current.processor} />);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
   await waitFor(() => assert.deepEqual(answers, ['new']));
-  act(() => hook.result.current.clear()); assert.deepEqual(hook.result.current.controller.getSnapshot(), []);
+  act(() => hook.result.current.clear()); assert.equal(hook.result.current.processor.getSurfaces().size, 0);
   const final = hook.result.current.beginResponse({ onText: t => text.push(t) });
-  const controller = hook.result.current.controller;
+  const processor = hook.result.current.processor;
   view.unmount(); hook.unmount(); await Promise.resolve();
   final.push(frame(questionMessages())); final.finish(); assert.deepEqual(text, ['Текст']);
-  assert.throws(() => controller.processMessage(metricMessages()[0]), /закрыт/); cleanup();
+  assert.equal(processor.getSurfaces().size, 0); cleanup();
 });
 
 test('standard component and model updates render zero, negative decimal and multiple surfaces', () => {
-  const controller = createA2uiController(() => {});
+  const processor = createA2uiProcessor(() => {});
   const messages = metricMessages();
   if ('updateComponents' in messages[1]) Object.assign(messages[1].updateComponents.components[0], { value: 0, title: 'Заказы' });
-  messages.forEach(m => controller.processMessage(m));
-  const view = render(<A2uiView controller={controller} />);
+  messages.forEach(m => processor.processMessages(m));
+  const view = render(<A2uiView processor={processor} />);
   assert.equal(view.container.querySelector('.ant-statistic-content-value')?.textContent, '0');
-  act(() => controller.processMessage({ version: 'v0.9', updateComponents: { surfaceId: 'result', components: [{
+  act(() => processor.processMessages({ version: 'v0.9', updateComponents: { surfaceId: 'result', components: [{
     id: 'root', component: 'MetricCard', title: 'Изменение', value: -12.5, unit: '%',
   }] } }));
   assert.ok(view.getByText('Изменение')); assert.ok(view.getByText('%'));
   assert.equal(view.container.querySelector('.ant-statistic-content-value')?.textContent, '-12,5');
-  act(() => questionMessages().forEach(m => controller.processMessage(m)));
+  act(() => questionMessages().forEach(m => processor.processMessages(m)));
   assert.ok(view.getByRole('button', { name: 'Выручка' })); assert.ok(view.getByText('Изменение'));
-  act(() => controller.clear()); assert.equal(view.container.textContent, ''); cleanup(); controller.dispose();
+  act(() => { for (const surfaceId of processor.getSurfaces().keys()) processor.processMessages({ version: 'v0.9', deleteSurface: { surfaceId } }); }); assert.equal(view.container.textContent, ''); cleanup(); processor.dispose();
 });

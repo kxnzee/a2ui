@@ -31,18 +31,18 @@ const request = existingStreamingRequest(input, {
 });
 
 // В разметке существующего чата:
-<A2uiView controller={a2ui.controller} />
+<A2uiView processor={a2ui.processor} />
 
 // При пользовательской отмене:
 response.cancel();
 request.cancel();
 ```
 
-Имена функций выше обозначают ваши методы: сопоставьте callbacks с текущим транспортом. Не создавайте response при рендере; один response на ответ агента. Создавайте его и для ответа после выбора варианта. Привяжите onText к конкретному сообщению вашего store. Ошибка отправки также должна отклонять Promise в onAction: одного транспортного onError недостаточно для повтора выбора.
+Имена функций выше обозначают ваши методы: сопоставьте callbacks с текущим транспортом. Не создавайте response при рендере; один response на ответ агента. Создавайте его и для ответа после выбора варианта. Привяжите onText к конкретному сообщению вашего store. Ошибки отправки, loading и повтор выбора обрабатывает существующий чат; UI-модуль не меняет статус запроса.
 
 `push` принимает уже извлечённые текстовые дельты, не SSE-конверты/байты/накопленный текст. Чат должен выводить обычный текст из onText вместо исходных чанков. История, Markdown, скролл, загрузка, запрос и отмена транспорта остаются вашему приложению. При сбросе диалога вызывайте clear; при смене диалога используйте отдельный экземпляр хука.
 
-Если ваши события стрима уже содержат отдельное поле с JSON A2UI, вызывайте `a2ui.controller.processMessage(event.a2ui)` напрямую и продолжайте выводить текст своей интеграцией. Теги в этом варианте не нужны.
+Если ваши события стрима уже содержат отдельное поле с JSON A2UI, вызывайте `a2ui.processor.processMessages(event.a2ui)` напрямую и продолжайте выводить текст своей интеграцией. Теги в этом варианте не нужны.
 
 ## Два режима вашего транспорта
 
@@ -74,7 +74,7 @@ const nextMessages = [...existingChatMessages, { role: 'user', content: nextUser
 Если **ответ**, отдельно от истории чата, уже содержит массив стандартных A2UI-сообщений, передайте его напрямую:
 
 ```ts
-a2ui.controller.processMessages(a2uiProtocolMessages);
+a2ui.processor.processMessages(a2uiProtocolMessages);
 ```
 
 Этот массив содержит `{version, createSurface/updateComponents/…}`, а не `{role, content}`. Для массива chat messages сначала извлеките содержимое нужного assistant-сообщения своим адаптером. Пример обоих режимов с импортами и callbacks — `src/example/AgentChat.tsx` и `src/example/request.ts`.
@@ -113,7 +113,7 @@ npm run export:agent
 
 ```text
 Вот показатель.
-<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:kxnzee:a2ui:cards:v1"}}</a2ui>
+<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:kxnzee:a2ui:cards:v2"}}</a2ui>
 <a2ui>{"version":"v0.9","updateComponents":{"surfaceId":"result","components":[{"id":"root","component":"MetricCard","title":"Выручка","value":1250000,"unit":"₽"}]}}</a2ui>
 ```
 
@@ -125,8 +125,8 @@ npm run export:agent
 
 ## Нажатие пользователя
 
-`onAction` получает стандартное клиентское сообщение `{version: 'v0.9', action: {name, surfaceId, sourceComponentId, timestamp, context}}`. В нашем примере name — clarification_answer, context содержит questionId и optionId. Отправляйте полный объект либо JSON-строку в тот же диалог. Следующий ответ агента обрабатывается новым response. Повторные клики блокируются на время отправки и после успеха, при ошибке карточка позволяет повторить. Серверную идемпотентность обеспечивает ваше приложение.
+`onAction` получает стандартное клиентское сообщение `{version: 'v0.9', action: {name, surfaceId, sourceComponentId, timestamp, context}}`. В нашем примере name — clarification_answer, context содержит questionId и optionId. Отправляйте полный объект либо JSON-строку в тот же диалог. Следующий ответ агента обрабатывается новым response. Если нужно блокировать варианты, приложение обновляет disabled через стандартный updateDataModel и снимает блокировку при ошибке. Пример расположен в src/demo/main.tsx; модуль не управляет отправкой. Серверную идемпотентность обеспечивает ваше приложение.
 
 ## Добавление компонентов
 
-В catalog.tsx добавьте Zod-схему с description, React-реализацию через createComponentImplementation и регистрацию в Catalog. Общие инструкции хранятся в Catalog.instructions. Затем повторите export:agent. Контроллеру не нужна новая ветка type→component: MessageProcessor использует component из updateComponents и зарегистрированный каталог. Доменная обработка новых событий при необходимости добавляется в обработчик onAction.
+В catalog.tsx добавьте Zod-схему с description, React-реализацию через createComponentImplementation и регистрацию в Catalog. Общие инструкции хранятся в Catalog.instructions. Затем повторите export:agent. Дополнительный контроллер не нужен: MessageProcessor использует component из updateComponents и зарегистрированный каталог. Доменная обработка новых событий при необходимости добавляется в обработчик onAction.

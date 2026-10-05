@@ -16,7 +16,7 @@ UI-only пример с двумя зарегистрированными ком
 const a2ui = useA2ui({ onAction: message => yourExistingSend(message) });
 const response = a2ui.beginResponse({ onText: yourAppendText, onError: yourShowError });
 // callbacks вашего стрима: response.push / finish / cancel
-// В вашем UI: <A2uiView controller={a2ui.controller} />
+// В вашем UI: <A2uiView processor={a2ui.processor} />
 ```
 
 Поддержаны оба режима: HTTP chunked с текстовыми дельтами и полный POST-ответ с assistant.content. Массив messages истории остаётся вашему чату.
@@ -38,17 +38,17 @@ npm run dev
 npm run check
 ```
 
-Проверяет TypeScript, тесты протокола/каталога/действий/lifecycle, обе production-сборки и экспорт конфигурации агента.
+Проверяет TypeScript, тесты протокола/каталога/действий/lifecycle и обоих режимов запроса, обе production-сборки и экспорт конфигурации агента.
 
 ## Что идёт в стриме
 
 ```text
 Вот показатель.
-<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:kxnzee:a2ui:cards:v1"}}</a2ui>
+<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:kxnzee:a2ui:cards:v2"}}</a2ui>
 <a2ui>{"version":"v0.9","updateComponents":{"surfaceId":"result","components":[{"id":"root","component":"MetricCard","title":"Выручка","value":1250000,"unit":"₽"}]}}</a2ui>
 ```
 
-Внутри каждого блока одно стандартное сообщение. Теги `<a2ui>` — только обрамление смешанного текстового транспорта, не спецификация A2UI. Собственный `{type, props}` удалён. Если транспорт уже отдаёт отдельные A2UI-объекты, передавайте их в controller.processMessage напрямую без тегов/декодера.
+Внутри каждого блока одно стандартное сообщение. Теги `<a2ui>` — только обрамление смешанного текстового транспорта, не спецификация A2UI. Собственный `{type, props}` и контроллер не используются. Обработка и state принадлежат SDK. Если транспорт уже отдаёт отдельные A2UI-объекты, передавайте их в processor.processMessages напрямую без тегов/декодера.
 
 Поддерживаются createSurface, updateComponents, updateDataModel, deleteSurface и несколько поверхностей. Ошибка сообщения не откатывает предыдущие принятые сообщения. SDK проверяет структуры и свойства, но не достоверность цифр; гарантировать валидный ответ LLM одной схемой нельзя.
 
@@ -72,7 +72,7 @@ npm run package:demo
 npm run build
 npm pack
 # В вашем приложении:
-npm install /path/to/kxnzee-a2ui-clarification-ui-0.3.0.tgz
+npm install /path/to/kxnzee-a2ui-clarification-ui-0.4.0.tgz
 ```
 
 Пакет не опубликован в npm. React и ReactDOM предоставляет приложение. Версии AntD 5 потребуют адаптации catalog.tsx; пример проверяется с AntD 6.6.5. Миграция предыдущего собственного контракта описана в README модуля.

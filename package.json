@@ -1,6 +1,6 @@
 {
   "name": "@kxnzee/a2ui-clarification-ui",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "React + Ant Design clarification and metric cards for an existing streamed agent integration",
   "type": "module",
@@ -23,7 +23,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/stream.test.ts tests/controller.test.ts tests/ui.test.tsx tests/request.test.ts",
+    "test": "node --import tsx --test tests/stream.test.ts tests/processor.test.ts tests/ui.test.tsx tests/request.test.ts",
     "build:demo": "vite build",
     "build:lib": "vite build --config vite.library.config.ts && tsc -p tsconfig.library.json",
     "build": "npm run build:demo && npm run build:lib && npm run export:agent",

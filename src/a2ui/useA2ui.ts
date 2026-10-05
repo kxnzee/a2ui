@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { createA2uiController, type ActionHandler } from './controller.js';
+import { createA2uiProcessor, type ActionHandler } from './processor.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
 export type A2uiResponseOptions = Pick<StreamOptions, 'onText' | 'onError'>;
@@ -15,8 +15,8 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
   answerRef.current = onAction;
   const mounted = useRef(true);
   const active = useRef<A2uiResponse | undefined>(undefined);
-  const controller = useMemo(
-    () => createA2uiController(answer => answerRef.current(answer)), [],
+  const processor = useMemo(
+    () => createA2uiProcessor(answer => answerRef.current(answer)), [],
   );
 
   const beginResponse = useCallback((options: A2uiResponseOptions): A2uiResponse => {
@@ -25,7 +25,7 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
     let ended = false;
     const decoder = createA2uiStream({
       ...options,
-      onMessage: message => controller.processMessage(message),
+      onMessage: message => processor.processMessages(message),
     });
     const response: A2uiResponse = {
       push(delta) { if (!ended) decoder.push(delta); },
@@ -43,23 +43,25 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
     };
     active.current = response;
     return response;
-  }, [controller]);
+  }, [processor]);
 
   const clear = useCallback(() => {
     active.current?.cancel();
-    controller.clear();
-  }, [controller]);
+    for (const surfaceId of processor.getSurfaces().keys()) {
+      processor.processMessages({ version: 'v0.9', deleteSurface: { surfaceId } });
+    }
+  }, [processor]);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
       active.current?.cancel();
-      // StrictMode повторяет setup/cleanup эффекта. Закрываем контроллер
+      // StrictMode повторяет setup/cleanup эффекта. Закрываем processor
       // только если за cleanup не последовал повторный setup.
-      queueMicrotask(() => { if (!mounted.current) controller.dispose(); });
+      queueMicrotask(() => { if (!mounted.current) processor.dispose(); });
     };
-  }, [controller]);
+  }, [processor]);
 
-  return useMemo(() => ({ controller, beginResponse, clear }), [controller, beginResponse, clear]);
+  return useMemo(() => ({ processor, beginResponse, clear }), [processor, beginResponse, clear]);
 }

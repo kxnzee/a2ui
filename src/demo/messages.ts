@@ -6,14 +6,12 @@ const examples: Record<'clarification' | 'metric', A2uiMessage[]> = {
   clarification: [
     { version: 'v0.9', createSurface: { surfaceId: 'question', catalogId: CATALOG_ID } },
     { version: 'v0.9', updateDataModel: { surfaceId: 'question', path: '/', value: {
-      selected: '', disabled: false, answered: false, error: '',
+      selected: '', disabled: false,
     } } },
     { version: 'v0.9', updateComponents: { surfaceId: 'question', components: [{
-      id: 'root', component: 'ClarificationCard', questionId: 'metric-1',
-      question: 'Какой показатель показать?',
+      id: 'root', component: 'ClarificationCard', question: 'Какой показатель показать?',
       options: [{ id: 'revenue', label: 'Выручка' }, { id: 'orders', label: 'Количество заказов' }],
       selected: { path: '/selected' }, disabled: { path: '/disabled' },
-      answered: { path: '/answered' }, error: { path: '/error' },
       onSelect: { event: { name: 'clarification_answer', context: {
         questionId: 'metric-1', optionId: { path: '/selected' },
       } } },

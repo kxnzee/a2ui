@@ -13,23 +13,45 @@ function Demo() {
   const [failSend, setFailSend] = useState(false);
   const failRef = useRef(false);
   const generation = useRef(0);
+  const sending = useRef(false);
   const cancelRef = useRef<() => void>(() => {});
   failRef.current = failSend;
   const a2ui = useA2ui({ onAction: async message => {
+    if (sending.current) return;
+    sending.current = true;
     const current = generation.current;
-    await new Promise(resolve => setTimeout(resolve, 400));
-    if (current !== generation.current) return;
-    if (failRef.current) throw new Error('Демонстрационная ошибка');
-    setAnswer(message);
-    const metricMessages = getDemoMessages().metric;
-    const update = metricMessages[1];
-    if ('updateComponents' in update && message.action.context.optionId === 'orders') {
-      Object.assign(update.updateComponents.components[0], { title: 'Количество заказов', value: 320, unit: 'шт.' });
+    const surface = a2ui.processor.getSurface(message.action.surfaceId);
+    const setDisabled = (value: boolean) => {
+      if (current === generation.current && a2ui.processor.getSurface(message.action.surfaceId) === surface) {
+        a2ui.processor.processMessages({ version: 'v0.9', updateDataModel: {
+          surfaceId: message.action.surfaceId, path: '/disabled', value,
+        } });
+      }
+    };
+    setDisabled(true);
+    setError('');
+    try {
+      await new Promise(resolve => setTimeout(resolve, 400));
+      if (current !== generation.current) return;
+      if (failRef.current) throw new Error('Демонстрационная ошибка отправки. Выберите вариант ещё раз.');
+      setAnswer(message);
+      const metricMessages = getDemoMessages().metric;
+      const update = metricMessages[1];
+      if ('updateComponents' in update && message.action.context.optionId === 'orders') {
+        Object.assign(update.updateComponents.components[0], { title: 'Количество заказов', value: 320, unit: 'шт.' });
+      }
+      const messages = [
+        { version: 'v0.9', deleteSurface: { surfaceId: message.action.surfaceId } }, ...metricMessages,
+      ];
+      play(`Демонстрационные данные.\n${frame(messages)}`);
+    } catch (error) {
+      if (current === generation.current) {
+        setError(error instanceof Error ? error.message : 'Ошибка отправки');
+        setDisabled(false);
+      }
+    } finally {
+      if (current === generation.current) sending.current = false;
     }
-    const messages = [
-      { version: 'v0.9', deleteSurface: { surfaceId: message.action.surfaceId } }, ...metricMessages,
-    ];
-    play(`Демонстрационные данные.\n${frame(messages)}`);
   } });
   function frame(messages: unknown[]) {
     return messages.map(message => `<a2ui>${JSON.stringify(message)}</a2ui>`).join('\n');
@@ -56,12 +78,13 @@ function Demo() {
     }, 8);
     cancelRef.current = () => { clearInterval(timer); decoder.cancel(); };
   }
-  useEffect(() => () => { cancelRef.current(); }, []);
+  useEffect(() => () => { generation.current++; cancelRef.current(); }, []);
 
   function start() {
     a2ui.clear();
     setAnswer(undefined);
     generation.current++;
+    sending.current = false;
     play(`Уточню один момент.\n${frame(getDemoMessages().clarification)}`);
   }
 
@@ -75,7 +98,7 @@ function Demo() {
       </Space>
       <Card title={streaming ? 'Агент печатает…' : 'Ответ агента'}><div className="message">{text || 'Нажмите «Запустить».'}</div></Card>
       {error && <Alert type="error" title={error} />}
-      <A2uiView controller={a2ui.controller} />
+      <A2uiView processor={a2ui.processor} />
       {answer && <Card title="Событие для существующего запроса"><pre>{JSON.stringify(answer, null, 2)}</pre></Card>}
     </main>
   </ConfigProvider>;

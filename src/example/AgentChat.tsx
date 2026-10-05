@@ -37,6 +37,6 @@ export function AgentChat({ send, messages, onMessagesChange, stream = true }: {
     <button onClick={start}>Запросить график</button>
     <p style={{ whiteSpace: 'pre-wrap' }}>{text}</p>
     {error && <p role="alert">{error}</p>}
-    <A2uiView controller={a2ui.controller} />
+    <A2uiView processor={a2ui.processor} />
   </>;
 }

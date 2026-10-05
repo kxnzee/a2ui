@@ -6,7 +6,6 @@ export function questionMessages(questionId = 'metric-1') {
   const message = messages[2];
   if ('updateComponents' in message) {
     const card = message.updateComponents.components[0];
-    card.questionId = questionId;
     card.onSelect.event.context.questionId = questionId;
   }
   return messages;
