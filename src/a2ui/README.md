@@ -1,4 +1,6 @@
-# Переносимый модуль A2UI
+# Переносимый модуль A2UI · 0.4.0
+
+Протокол: A2UI v0.9. Каталог: `urn:kxnzee:a2ui:cards:v2`.
 
 Копируйте весь `src/a2ui` в своё React-приложение. Зависимости: `@a2ui/react` и `@a2ui/web_core` 0.12.0, Zod 3.25.76, AntD 6.6.5, React/ReactDOM 18.2 или 19. Для AntD 5 адаптируйте Space.orientation в catalog.tsx; эта версия здесь не проверялась.
 
@@ -31,6 +33,8 @@ const response = a2ui.beginResponse({
 
 <A2uiView processor={a2ui.processor} />
 ```
+
+`useA2ui` возвращает `{processor, beginResponse, clear}`. processor — экземпляр SDK MessageProcessor; beginResponse подключает текстовые callbacks текущего ответа; clear сбрасывает поверхности диалога.
 
 Если транспорт отдаёт JSON A2UI отдельно, передавайте его прямо в SDK: `a2ui.processor.processMessages(messageOrArray)`. Декодер тогда не нужен. Нативный processMessages принимает как одно сообщение, так и массив сообщений протокола; массив истории чата `{role, content}` ему не передаётся.
 

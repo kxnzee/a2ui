@@ -1,6 +1,6 @@
-# A2UI v0.9: React + Ant Design + существующий стрим агента
+# A2UI для готового React/AntD-чата · 0.4.0
 
-UI-only пример с двумя зарегистрированными компонентами: **ClarificationCard** для уточнения с вариантами и **MetricCard** для числового показателя. Агент выдаёт стандартные сообщения A2UI; официальный MessageProcessor валидирует их по единому каталогу и рендерит через @a2ui/react. Сервер, запрос к DeepSeek и транспорт не добавлены.
+Протокол A2UI v0.9, SDK 0.12.0, каталог `urn:kxnzee:a2ui:cards:v2`. Два зарегистрированных компонента: **ClarificationCard** для уточнения с вариантами и **MetricCard** для числового показателя. Агент выдаёт стандартные сообщения A2UI; официальный MessageProcessor валидирует их по единому каталогу и рендерит через @a2ui/react. Сервер, запрос к DeepSeek и транспорт не добавлены.
 
 ## Перенос в ваш готовый UI и чат
 
@@ -13,13 +13,22 @@ UI-only пример с двумя зарегистрированными ком
 | src/demo | Эмулятор чата/стрима, для переноса не нужен |
 
 ```tsx
+import { useA2ui, A2uiView } from './features/a2ui';
+
+// Внутри вашего компонента чата:
 const a2ui = useA2ui({ onAction: message => yourExistingSend(message) });
-const response = a2ui.beginResponse({ onText: yourAppendText, onError: yourShowError });
-// callbacks вашего стрима: response.push / finish / cancel
-// В вашем UI: <A2uiView processor={a2ui.processor} />
+
+// Вызывайте при начале каждого ответа, а не во время рендера:
+function beginAgentReply() {
+  return a2ui.beginResponse({ onText: yourAppendText, onError: yourShowError });
+}
+// Stream: response.push(delta) → response.finish().
+// POST: response.push(assistant.content) → response.finish().
+// При ошибке/отмене: response.cancel().
+// В разметке: <A2uiView processor={a2ui.processor} />
 ```
 
-Поддержаны оба режима: HTTP chunked с текстовыми дельтами и полный POST-ответ с assistant.content. Массив messages истории остаётся вашему чату.
+Поддержаны оба режима: HTTP chunked с текстовыми дельтами и полный POST-ответ с assistant.content. Готовые JSON-сообщения: `a2ui.processor.processMessages(messageOrArray)`. Историю `messages`, loading, ошибки отправки и повтор ведёт ваш чат.
 
 `onAction` получает стандартное `{version, action}`. Схемы/инструкции агенту экспортируются из Catalog и SDK через getAgentConfiguration(). Регистрация на фронте не доставляет их модели автоматически; подключите конфигурацию в существующей интеграции.
 
@@ -75,4 +84,4 @@ npm pack
 npm install /path/to/kxnzee-a2ui-clarification-ui-0.4.0.tgz
 ```
 
-Пакет не опубликован в npm. React и ReactDOM предоставляет приложение. Версии AntD 5 потребуют адаптации catalog.tsx; пример проверяется с AntD 6.6.5. Миграция предыдущего собственного контракта описана в README модуля.
+Пакет не опубликован в npm. React и ReactDOM предоставляет приложение. Версии AntD 5 потребуют адаптации catalog.tsx; пример проверяется с AntD 6.6.5. Изменения API 0.4 описаны в [README модуля](src/a2ui/README.md#изменение-api-в-04). При обновлении фронта повторите export:agent и замените конфигурацию модели вместе с каталогом.

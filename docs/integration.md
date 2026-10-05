@@ -1,4 +1,4 @@
-# Подключение стандартного A2UI к существующему UI и чату
+# Подключение A2UI 0.4.0 к существующему UI и чату
 
 Переносите только [`src/a2ui`](../src/a2ui). [README модуля](../src/a2ui/README.md) содержит карту файлов, зависимости, стандартные сообщения и правила lifecycle. [`src/example/AgentChat.tsx`](../src/example/AgentChat.tsx) — компилируемый внешний адаптер вашего запроса, не новый HTTP-клиент.
 
@@ -7,38 +7,45 @@
 ```tsx
 import { useA2ui, A2uiView, type A2uiActionMessage } from './features/a2ui';
 
-// Внутри вашего компонента чата:
+// Внутри компонента чата:
 const a2ui = useA2ui({
-  onAction: async (message: A2uiActionMessage) => {
-    // Стандартное сообщение {version, action} → ваш существующий запрос.
-    await existingSendToAgent(message);
-  },
+  onAction: (message: A2uiActionMessage) => send(JSON.stringify(message)),
 });
 
-// Перед каждым запросом / ответом агента:
-const response = a2ui.beginResponse({
-  onText: delta => appendToMessage(messageId, delta),
-  onError: error => setMessageError(messageId, error.message),
-});
-
-const request = existingStreamingRequest(input, {
-  onTextDelta: response.push,
-  onDone: response.finish,
-  onError: error => {
-    response.cancel();
-    setMessageError(messageId, error.message);
-  },
-});
+// Та же функция вызывается для пользовательского текста и действия карточки.
+function send(content: string) {
+  const messageId = createAssistantMessage();
+  const response = a2ui.beginResponse({
+    onText: delta => appendToMessage(messageId, delta),
+    onError: error => setMessageError(messageId, error.message),
+  });
+  let raw = '';
+  const request = existingStreamingRequest({
+    messages: [...existingChatMessages, { role: 'user', content }],
+    stream: true,
+  }, {
+    onTextDelta(delta: string) {
+      raw += delta;
+      response.push(delta);
+    },
+    onDone() {
+      response.finish();
+      saveRawAssistantContent(messageId, raw); // Вместе с A2UI-блоками.
+    },
+    onError(error: Error) {
+      response.cancel();
+      setMessageError(messageId, error.message);
+    },
+  });
+  registerCancel(messageId, () => { response.cancel(); request.cancel(); });
+  return request.accepted;
+}
 
 // В разметке существующего чата:
 <A2uiView processor={a2ui.processor} />
-
-// При пользовательской отмене:
-response.cancel();
-request.cancel();
 ```
 
-Имена функций выше обозначают ваши методы: сопоставьте callbacks с текущим транспортом. Не создавайте response при рендере; один response на ответ агента. Создавайте его и для ответа после выбора варианта. Привяжите onText к конкретному сообщению вашего store. Ошибки отправки, loading и повтор выбора обрабатывает существующий чат; UI-модуль не меняет статус запроса.
+Функции store и existingStreamingRequest выше обозначают ваши методы; existingChatMessages — текущая история, включая пользовательский текст, добавляемый при отправке. registerCancel регистрирует отмену вашего транспорта, request.accepted — Promise его принятия запроса (как в компилируемом примере). Эти имена не являются API A2UI: сопоставьте callbacks с текущим транспортом. Не создавайте response при рендере; один response на ответ агента. Создавайте его и для ответа после выбора варианта. Привяжите onText к конкретному сообщению вашего store. Ошибки отправки, loading и повтор выбора обрабатывает существующий чат; UI-модуль не меняет статус запроса.
 
 `push` принимает уже извлечённые текстовые дельты, не SSE-конверты/байты/накопленный текст. Чат должен выводить обычный текст из onText вместо исходных чанков. История, Markdown, скролл, загрузка, запрос и отмена транспорта остаются вашему приложению. При сбросе диалога вызывайте clear; при смене диалога используйте отдельный экземпляр хука.
 
@@ -117,7 +124,76 @@ npm run export:agent
 <a2ui>{"version":"v0.9","updateComponents":{"surfaceId":"result","components":[{"id":"root","component":"MetricCard","title":"Выручка","value":1250000,"unit":"₽"}]}}</a2ui>
 ```
 
-Для ClarificationCard последовательность состоит из createSurface, updateDataModel с начальным состоянием и updateComponents с карточкой/действием. Полные примеры находятся в `src/demo/messages.ts`; скрипт export:agent дополнительно сохраняет их в examples.json для prompt локального агента. UI-модуль и getAgentConfiguration не содержат демо-сообщений. При необходимости ваш backend добавляет examples.json к prompt отдельно.
+Для ClarificationCard сначала создаётся поверхность, затем начальное значение выбранного варианта и карточка:
+
+<!-- clarification-example -->
+```json
+[
+  {
+    "version": "v0.9",
+    "createSurface": {
+      "surfaceId": "question",
+      "catalogId": "urn:kxnzee:a2ui:cards:v2"
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateDataModel": {
+      "surfaceId": "question",
+      "path": "/",
+      "value": {
+        "selected": "",
+        "disabled": false
+      }
+    }
+  },
+  {
+    "version": "v0.9",
+    "updateComponents": {
+      "surfaceId": "question",
+      "components": [
+        {
+          "id": "root",
+          "component": "ClarificationCard",
+          "question": "Какой показатель показать?",
+          "options": [
+            {
+              "id": "revenue",
+              "label": "Выручка"
+            },
+            {
+              "id": "orders",
+              "label": "Количество заказов"
+            }
+          ],
+          "selected": {
+            "path": "/selected"
+          },
+          "disabled": {
+            "path": "/disabled"
+          },
+          "onSelect": {
+            "event": {
+              "name": "clarification_answer",
+              "context": {
+                "questionId": "metric-1",
+                "optionId": {
+                  "path": "/selected"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+]
+```
+<!-- /clarification-example -->
+
+Это массив стандартных сообщений A2UI. Для прямого JSON-ответа передайте его в processor.processMessages. Для смешанного текста обрамляйте **каждый объект отдельно** в `<a2ui>…</a2ui>`. questionId передаётся в context события; у карточки есть question, options, selected, onSelect и необязательный disabled.
+
+Полные примеры находятся в src/demo/messages.ts. Скрипт export:agent сохраняет examples.json отдельно; backend может добавить его к prompt. Модуль getAgentConfiguration возвращает схемы и инструкции без примеров.
 
 Декодер передаёт стандартное сообщение в MessageProcessor без преобразования. SDK проверяет его по протоколу и каталогу; A2uiView рендерит все активные поверхности. Новое сообщение может обновить карточку или её данные, а не обязательно заменить всю поверхность. Для удаления агент выдаёт deleteSurface.
 
@@ -125,8 +201,19 @@ npm run export:agent
 
 ## Нажатие пользователя
 
-`onAction` получает стандартное клиентское сообщение `{version: 'v0.9', action: {name, surfaceId, sourceComponentId, timestamp, context}}`. В нашем примере name — clarification_answer, context содержит questionId и optionId. Отправляйте полный объект либо JSON-строку в тот же диалог. Следующий ответ агента обрабатывается новым response. Если нужно блокировать варианты, приложение обновляет disabled через стандартный updateDataModel и снимает блокировку при ошибке. Пример расположен в src/demo/main.tsx; модуль не управляет отправкой. Серверную идемпотентность обеспечивает ваше приложение.
+`onAction` получает стандартное клиентское сообщение `{version: 'v0.9', action: {name, surfaceId, sourceComponentId, timestamp, context}}`. В нашем примере name — clarification_answer, context содержит questionId и optionId. Отправляйте полный объект либо JSON-строку в тот же диалог. Следующий ответ агента обрабатывается новым response. Если нужно блокировать варианты, приложение обновляет disabled через стандартный updateDataModel и снимает блокировку при ошибке. Например, для binding disabled: {path: "/disabled"} приложение передаёт `{version: "v0.9", updateDataModel: {surfaceId: "question", path: "/disabled", value: true}}` перед отправкой и false при ошибке. Пример расположен в src/demo/main.tsx; модуль не управляет отправкой. Серверную идемпотентность обеспечивает ваше приложение.
 
 ## Добавление компонентов
 
 В catalog.tsx добавьте Zod-схему с description, React-реализацию через createComponentImplementation и регистрацию в Catalog. Общие инструкции хранятся в Catalog.instructions. Затем повторите export:agent. Дополнительный контроллер не нужен: MessageProcessor использует component из updateComponents и зарегистрированный каталог. Доменная обработка новых событий при необходимости добавляется в обработчик onAction.
+
+
+## Какие файлы переносить
+
+| Куда | Что перенести |
+| --- | --- |
+| Ваш React UI | Весь src/a2ui, либо локальный npm-пакет 0.4.0 |
+| Интеграция локального агента | Весь dist/agent после npm run export:agent |
+| Внутренний npm registry/кэш | Зависимости из package.json с закреплёнными версиями |
+
+src/demo и src/example нужны для проверки и знакомства с подключением. Для переноса UI-модуля достаточно src/a2ui. При переходе с предыдущего варианта замените controller на processor, используйте processMessages и обновите конфигурацию агента для cards:v2. Поля answered/error и отдельный questionId в свойствах карточки больше не используются.
