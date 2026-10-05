@@ -1,7 +1,8 @@
 import { mkdir, writeFile, readdir, copyFile } from 'node:fs/promises';
 import { getAgentConfiguration } from '../src/a2ui/agent.ts';
+import { getDemoMessages } from '../src/demo/messages.ts';
 await mkdir('dist/agent', { recursive: true });
-const config = getAgentConfiguration();
+const config = { ...getAgentConfiguration(), examples: getDemoMessages() };
 for (const [name, value] of Object.entries(config)) {
   await writeFile(`dist/agent/${name}.${typeof value === 'string' ? 'txt' : 'json'}`,
     typeof value === 'string' ? value : JSON.stringify(value, null, 2));

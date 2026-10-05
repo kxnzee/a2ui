@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { NodeResolver, getValue, A2uiClientMessageSchema, type WritableBinding } from '@a2ui/web_core/v0_9';
 import { createA2uiController } from '../src/a2ui/controller.js';
 import { a2uiCatalog } from '../src/a2ui/catalog.js';
+import { getDemoMessages } from '../src/demo/messages.js';
 import { questionMessages, metricMessages, removeQuestion } from './fixtures.js';
 const resolvers: NodeResolver[] = [];
 afterEach(() => { for (const r of resolvers.splice(0)) r.dispose(); });
@@ -67,7 +68,7 @@ test('SDK rejects unknown catalog, component, properties and missing surfaces', 
   c.dispose(); assert.throws(() => c.processMessage(metricMessages()[0]), /закрыт/);
 });
 
-test('agent configuration comes from the renderer catalog and contains executable standard examples', async () => {
+test('agent configuration comes from the renderer catalog and demo messages conform to its catalog', async () => {
   const { getAgentConfiguration } = await import('../src/a2ui/agent.js');
   const config = getAgentConfiguration();
   assert.deepEqual(config.catalogSchema, a2uiCatalog.catalogSchema);
@@ -75,7 +76,7 @@ test('agent configuration comes from the renderer catalog and contains executabl
   assert.deepEqual(config.capabilities['v0.9']?.supportedCatalogIds, [a2uiCatalog.id]);
   assert.ok(config.protocolSchema.$defs.CreateSurfaceMessage);
   const c = createA2uiController(() => {});
-  [...config.examples.clarification, ...config.examples.metric].forEach(m => c.processMessage(m));
+  [...getDemoMessages().clarification, ...getDemoMessages().metric].forEach(m => c.processMessage(m));
   assert.equal(c.getSnapshot().length, 2); c.dispose();
 });
 
@@ -113,7 +114,7 @@ test('exported agent configuration cannot mutate SDK schemas or subsequent expor
   exported.catalogSchema.title = 'mutated';
   exported.protocolSchema.$defs.CreateSurfaceMessage.required.push("mutated");
   exported.capabilities['v0.9']!.supportedCatalogIds = [];
-  exported.examples.clarification.length = 0;
+  assert.equal("examples" in exported, false);
   assert.deepEqual(getAgentConfiguration(), baseline);
   assert.deepEqual(a2uiCatalog.catalogSchema, baseline.catalogSchema);
 });

@@ -5,7 +5,7 @@
 | Файл | Ответственность |
 | --- | --- |
 | `catalog.tsx` | Схемы, описания, React-реализации и инструкции одного стандартного Catalog |
-| `agent.ts` | Экспорт catalogSchema, схемы протокола SDK, capabilities и примеров агенту |
+| `agent.ts` | Экспорт catalogSchema, схемы протокола SDK и capabilities агенту |
 | `stream.ts` | Только текстовое обрамление `<a2ui>` и проверка конверта схемой SDK |
 | `controller.ts` | Прямая обработка стандартных сообщений MessageProcessor, отправка стандартных action |
 | `A2uiView.tsx` | Рендер всех активных поверхностей через A2uiSurface |
@@ -72,7 +72,7 @@ const response = a2ui.beginResponse({
 - `protocolSchema` из `Schemas.A2uiMessageSchemaRaw` SDK;
 - `capabilities` из `MessageProcessor.getRendererCapabilities`, включая supportedCatalogIds (схема передаётся отдельно, без inline-дублирования);
 - `instructions` с правилами каталога и текстового обрамления;
-- `examples` — стандартные сообщения для обеих карточек.
+Примеры находятся отдельно в `src/demo/messages.ts`. Скрипт export:agent сохраняет их в examples.json; в переносимый UI-модуль и getAgentConfiguration они не входят.
 
 Вы передаёте эти данные локальной модели через существующую интеграцию. React-регистрация сама не доставляет каталог агенту. Назначение компонента хранится в description его схемы; общие правила — в Catalog.instructions. Добавляя компонент, изменяйте catalog.tsx и повторно экспортируйте конфигурацию. Схемы вручную отдельно от каталога не поддерживаются.
 

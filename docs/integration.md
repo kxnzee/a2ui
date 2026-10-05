@@ -92,7 +92,6 @@ const systemPrompt = [
   config.instructions,
   `Каталог компонентов:\n${JSON.stringify(config.catalogSchema)}`,
   `Схема сообщений A2UI:\n${JSON.stringify(config.protocolSchema)}`,
-  `Примеры стандартных сообщений:\n${JSON.stringify(config.examples)}`,
 ].join('\n\n');
 // Передайте systemPrompt вашей существующей интеграции модели.
 // Если она поддерживает capabilities negotiation, передайте config.capabilities.
@@ -118,7 +117,7 @@ npm run export:agent
 <a2ui>{"version":"v0.9","updateComponents":{"surfaceId":"result","components":[{"id":"root","component":"MetricCard","title":"Выручка","value":1250000,"unit":"₽"}]}}</a2ui>
 ```
 
-Для ClarificationCard последовательность состоит из createSurface, updateDataModel с начальным состоянием и updateComponents с карточкой/действием. Полный пример берётся из `getAgentConfiguration().examples.clarification` или examples.json; эмулятор использует тот же пример.
+Для ClarificationCard последовательность состоит из createSurface, updateDataModel с начальным состоянием и updateComponents с карточкой/действием. Полные примеры находятся в `src/demo/messages.ts`; скрипт export:agent дополнительно сохраняет их в examples.json для prompt локального агента. UI-модуль и getAgentConfiguration не содержат демо-сообщений. При необходимости ваш backend добавляет examples.json к prompt отдельно.
 
 Декодер передаёт стандартное сообщение в MessageProcessor без преобразования. SDK проверяет его по протоколу и каталогу; A2uiView рендерит все активные поверхности. Новое сообщение может обновить карточку или её данные, а не обязательно заменить всю поверхность. Для удаления агент выдаёт deleteSurface.
 

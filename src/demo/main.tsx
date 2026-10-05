@@ -1,7 +1,8 @@
+import { getDemoMessages } from './messages.js';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Alert, Button, Card, Checkbox, ConfigProvider, Space, Typography } from 'antd';
-import { A2uiView, useA2ui, getAgentConfiguration, type A2uiActionMessage } from '../a2ui/index.js';
+import { A2uiView, useA2ui, type A2uiActionMessage } from '../a2ui/index.js';
 import './style.css';
 
 function Demo() {
@@ -20,7 +21,7 @@ function Demo() {
     if (current !== generation.current) return;
     if (failRef.current) throw new Error('Демонстрационная ошибка');
     setAnswer(message);
-    const metricMessages = getAgentConfiguration().examples.metric;
+    const metricMessages = getDemoMessages().metric;
     const update = metricMessages[1];
     if ('updateComponents' in update && message.action.context.optionId === 'orders') {
       Object.assign(update.updateComponents.components[0], { title: 'Количество заказов', value: 320, unit: 'шт.' });
@@ -61,7 +62,7 @@ function Demo() {
     a2ui.clear();
     setAnswer(undefined);
     generation.current++;
-    play(`Уточню один момент.\n${frame(getAgentConfiguration().examples.clarification)}`);
+    play(`Уточню один момент.\n${frame(getDemoMessages().clarification)}`);
   }
 
   return <ConfigProvider theme={{ token: { colorPrimary: '#3458d6', borderRadius: 12 } }}>
