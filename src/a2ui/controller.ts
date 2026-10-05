@@ -1,12 +1,12 @@
 import { MessageProcessor, type SurfaceModel } from '@a2ui/web_core/v0_9';
 import type { ReactComponentImplementation } from '@a2ui/react/v0_9';
-import { ClarificationSchema, type Clarification, type ClarificationAnswer } from './contract.js';
-import { CATALOG_ID, SURFACE_ID, clarificationCatalog } from './catalog.js';
+import { A2uiComponentSchema, ClarificationSchema, MetricSchema, type Clarification, type ClarificationAnswer } from './contract.js';
+import { CATALOG_ID, SURFACE_ID, a2uiCatalog } from './catalog.js';
 
 export type AnswerHandler = (answer: ClarificationAnswer) => void | Promise<void>;
 
 // Контроллер не выполняет сетевые запросы. Транспорт принадлежит приложению.
-export class ClarificationController {
+export class A2uiController {
   private readonly processor: MessageProcessor<ReactComponentImplementation>;
   private readonly listeners = new Set<() => void>();
   private question?: Clarification;
@@ -17,7 +17,7 @@ export class ClarificationController {
   private revision = 0;
 
   constructor(private readonly onAnswer: AnswerHandler) {
-    this.processor = new MessageProcessor([clarificationCatalog], async action => {
+    this.processor = new MessageProcessor([a2uiCatalog], async action => {
       const question = this.question;
       if (this.disposed || this.busy || this.answered || !question) return;
       if (action.name !== 'clarification_answer' ||
@@ -52,6 +52,30 @@ export class ClarificationController {
   readonly getSnapshot = () => this.surface;
   readonly getQuestionId = () => this.question?.questionId;
   readonly getSurfaceKey = () => this.revision;
+
+  showComponent(input: unknown) {
+    const component = A2uiComponentSchema.parse(input);
+    switch (component.type) {
+      case 'clarification': this.showQuestion(component.props); break;
+      case 'metric': this.showMetric(component.props); break;
+    }
+  }
+
+  showMetric(input: unknown) {
+    if (this.disposed) throw new Error('Контроллер уже закрыт');
+    const metric = MetricSchema.parse(input);
+    this.clear();
+    this.revision++;
+    this.processor.processMessages([
+      { version: 'v0.9', createSurface: { surfaceId: SURFACE_ID, catalogId: CATALOG_ID } },
+      { version: 'v0.9', updateComponents: {
+        surfaceId: SURFACE_ID,
+        components: [{ id: 'root', component: 'MetricCard', ...metric }],
+      } },
+    ]);
+    this.surface = this.processor.getSurface(SURFACE_ID);
+    this.notify();
+  }
 
   showQuestion(input: unknown) {
     if (this.disposed) throw new Error('Контроллер уже закрыт');
@@ -118,6 +142,6 @@ export class ClarificationController {
   private notify() { this.listeners.forEach(listener => listener()); }
 }
 
-export function createClarificationController(onAnswer: AnswerHandler) {
-  return new ClarificationController(onAnswer);
+export function createA2uiController(onAnswer: AnswerHandler) {
+  return new A2uiController(onAnswer);
 }

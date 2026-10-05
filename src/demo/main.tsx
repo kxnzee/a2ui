@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Alert, Button, Card, Checkbox, ConfigProvider, Space, Typography } from 'antd';
-import { ClarificationSurface, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
+import { A2uiView, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
 import './style.css';
 
 function Demo() {
@@ -19,7 +19,11 @@ function Demo() {
     if (a2ui.controller.getQuestionId() !== selected.questionId) return;
     if (failRef.current) throw new Error('Демонстрационная ошибка');
     setAnswer(selected);
-    play(`Спасибо! Вы выбрали «${selected.label}». Теперь агент может продолжить ответ.`);
+    const metric = selected.optionId === 'revenue'
+      ? { title: 'Выручка', value: 1250000, unit: '₽' }
+      : { title: 'Количество заказов', value: 320, unit: 'шт.' };
+    // Тестовые цифры эмулятора, не данные реального агента.
+    play(`Демонстрационные данные: «${selected.label}».\n<ui>${JSON.stringify({ type: 'metric', props: metric })}</ui>`);
   } });
 
   function play(response: string) {
@@ -52,20 +56,20 @@ function Demo() {
       questionId: `metric-${Date.now()}`, question: 'Какой показатель показать на графике?',
       options: [{ id: 'revenue', label: 'Выручка' }, { id: 'orders', label: 'Количество заказов' }],
     };
-    play(`Уточню один момент.\n<clarification>${JSON.stringify(question)}</clarification>`);
+    play(`Уточню один момент.\n<ui>${JSON.stringify({ type: 'clarification', props: question })}</ui>`);
   }
 
   return <ConfigProvider theme={{ token: { colorPrimary: '#3458d6', borderRadius: 12 } }}>
     <main>
-      <Typography.Title>A2UI · уточнение в стриме</Typography.Title>
-      <Typography.Paragraph>React + Ant Design. Запрос к агенту в этом примере эмулируется; UI принимает текстовые чанки и возвращает выбранный ответ вашему приложению.</Typography.Paragraph>
+      <Typography.Title>A2UI · два компонента в стриме</Typography.Title>
+      <Typography.Paragraph>React + Ant Design. Запрос к агенту в этом примере эмулируется; UI показывает уточнение, затем числовой результат. Все цифры в демо тестовые.</Typography.Paragraph>
       <Space wrap>
         <Button type="primary" onClick={start}>Запустить / начать заново</Button>
         <Checkbox checked={failSend} onChange={e => setFailSend(e.target.checked)}>Эмулировать ошибку отправки</Checkbox>
       </Space>
       <Card title={streaming ? 'Агент печатает…' : 'Ответ агента'}><div className="message">{text || 'Нажмите «Запустить».'}</div></Card>
       {error && <Alert type="error" title={error} />}
-      <ClarificationSurface controller={a2ui.controller} />
+      <A2uiView controller={a2ui.controller} />
       {answer && <Card title="Событие для существующего запроса"><pre>{JSON.stringify(answer, null, 2)}</pre></Card>}
     </main>
   </ConfigProvider>;

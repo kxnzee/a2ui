@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { createClarificationController, type AnswerHandler } from './controller.js';
-import { createClarificationStream, type StreamOptions } from './stream.js';
+import { createA2uiController, type AnswerHandler } from './controller.js';
+import { createA2uiStream, type StreamOptions } from './stream.js';
 
 export type A2uiResponseOptions = Pick<StreamOptions, 'onText' | 'onError'>;
 export type A2uiResponse = {
@@ -16,16 +16,16 @@ export function useA2ui({ onAnswer }: { onAnswer: AnswerHandler }) {
   const mounted = useRef(true);
   const active = useRef<A2uiResponse | undefined>(undefined);
   const controller = useMemo(
-    () => createClarificationController(answer => answerRef.current(answer)), [],
+    () => createA2uiController(answer => answerRef.current(answer)), [],
   );
 
   const beginResponse = useCallback((options: A2uiResponseOptions): A2uiResponse => {
     if (!mounted.current) throw new Error('A2UI уже отключён');
     active.current?.cancel();
     let ended = false;
-    const decoder = createClarificationStream({
+    const decoder = createA2uiStream({
       ...options,
-      onClarification: question => controller.showQuestion(question),
+      onComponent: component => controller.showComponent(component),
     });
     const response: A2uiResponse = {
       push(delta) { if (!ended) decoder.push(delta); },

@@ -1,17 +1,17 @@
-import { ClarificationSchema, type Clarification } from './contract.js';
+import { A2uiComponentSchema, type A2uiComponent } from './contract.js';
 
-const OPEN = '<clarification>';
-const CLOSE = '</clarification>';
+const OPEN = '<ui>';
+const CLOSE = '</ui>';
 const MAX_BLOCK_LENGTH = 32_768;
 
 export type StreamOptions = {
   onText: (delta: string) => void;
-  onClarification: (question: Clarification) => void;
+  onComponent: (component: A2uiComponent) => void;
   onError?: (error: Error) => void;
 };
 
 // Принимает уже декодированные текстовые чанки от существующего транспорта.
-export function createClarificationStream(options: StreamOptions) {
+export function createA2uiStream(options: StreamOptions) {
   let buffer = '';
   let inside = false;
   let ended = false;
@@ -49,7 +49,7 @@ export function createClarificationStream(options: StreamOptions) {
             end > MAX_BLOCK_LENGTH) {
           failed = true;
           buffer = '';
-          fail('Блок уточнения слишком большой');
+          fail('UI-блок слишком большой');
           break;
         }
         if (end < 0) break;
@@ -58,10 +58,10 @@ export function createClarificationStream(options: StreamOptions) {
         buffer = buffer.slice(end + CLOSE.length);
         inside = false;
         try {
-          const question = ClarificationSchema.parse(JSON.parse(json));
-          options.onClarification(question);
+          const component = A2uiComponentSchema.parse(JSON.parse(json));
+          options.onComponent(component);
         } catch {
-          fail('Некорректный блок уточнения: проверьте JSON и схему');
+          fail('Некорректный UI-блок: проверьте JSON и схему');
         }
       }
     },
@@ -70,7 +70,7 @@ export function createClarificationStream(options: StreamOptions) {
       if (ended) return;
       ended = true;
       if (failed) return;
-      if (inside) fail('Стрим закончился до закрытия блока уточнения');
+      if (inside) fail('Стрим закончился до закрытия UI-блока');
       else emitText(buffer);
       buffer = '';
     },

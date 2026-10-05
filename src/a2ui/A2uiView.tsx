@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import { A2uiSurface } from '@a2ui/react/v0_9';
-import type { ClarificationController } from './controller.js';
+import type { A2uiController } from './controller.js';
 
-export function ClarificationSurface({ controller }: { controller: ClarificationController }) {
+export function A2uiView({ controller }: { controller: A2uiController }) {
   const surface = useSyncExternalStore(
     controller.subscribe, controller.getSnapshot, controller.getSnapshot,
   );

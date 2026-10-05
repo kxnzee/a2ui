@@ -10,14 +10,14 @@ Object.defineProperty(globalThis, 'getComputedStyle', { value: dom.window.getCom
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, writable: true });
 dom.window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false, media: '', onchange: null });
 const { render, renderHook, fireEvent, waitFor, act, cleanup } = await import('@testing-library/react');
-const { ClarificationSurface, createClarificationController, useA2ui } = await import('../src/a2ui/index.js');
+const { A2uiView, createA2uiController, useA2ui } = await import('../src/a2ui/index.js');
 
 test('AntD buttons send selected payload, show retry and render replacement question', async () => {
   const answers: unknown[] = []; let fail = true;
-  const controller = createClarificationController(answer => { if (fail) throw new Error('test'); answers.push(answer); });
+  const controller = createA2uiController(answer => { if (fail) throw new Error('test'); answers.push(answer); });
   const question = { questionId: 'q1', question: 'Что показать?', options: [{ id: 'a', label: 'Выручка' }, { id: 'b', label: 'Заказы' }] };
   controller.showQuestion(question);
-  const view = render(<ClarificationSurface controller={controller} />);
+  const view = render(<A2uiView controller={controller} />);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
   await waitFor(() => assert.ok(view.getByText('Не удалось отправить ответ. Попробуйте ещё раз.')));
   fail = false; fireEvent.click(view.getByRole('button', { name: 'Заказы' }));
@@ -36,21 +36,21 @@ after(() => dom.window.close());
 test('portable hook handles StrictMode, response replacement, latest callback and unmount', async () => {
   const answers: string[] = []; const text: string[] = [];
   const question = { questionId: 'hook-q1', question: 'Вопрос хука', options: [{ id: 'a', label: 'Первый' }, { id: 'b', label: 'Второй' }] };
-  const block = `<clarification>${JSON.stringify(question)}</clarification>`;
+  const block = `<ui>${JSON.stringify({ type: 'clarification', props: question })}</ui>`;
   const hook = renderHook(({ version }) => useA2ui({ onAnswer: () => { answers.push(version); } }), {
     initialProps: { version: 'old' },
     wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
   });
   await act(async () => {}); // deferred StrictMode cleanup must not dispose the live instance
   const first = hook.result.current.beginResponse({ onText: t => text.push(t) });
-  first.push('<clarif');
+  first.push('<u');
   const second = hook.result.current.beginResponse({ onText: t => text.push(t) });
   act(() => { first.push(block); second.push(`Текст${block}`); second.finish(); });
   second.push('late');
   assert.deepEqual(text, ['Текст']);
   assert.equal(hook.result.current.controller.getQuestionId(), 'hook-q1');
   hook.rerender({ version: 'new' });
-  const view = render(<ClarificationSurface controller={hook.result.current.controller} />);
+  const view = render(<A2uiView controller={hook.result.current.controller} />);
   fireEvent.click(view.getByRole('button', { name: 'Первый' }));
   await waitFor(() => assert.deepEqual(answers, ['new']));
   act(() => hook.result.current.clear());
@@ -64,4 +64,24 @@ test('portable hook handles StrictMode, response replacement, latest callback an
   assert.deepEqual(text, ['Текст']);
   assert.throws(() => controller.showQuestion(question), /закрыт/);
   cleanup();
+});
+
+test('metric renders zero, negative decimal and unit, then switches back to clarification', () => {
+  let answers = 0;
+  const controller = createA2uiController(() => { answers++; });
+  controller.showComponent({ type: 'metric', props: { title: 'Количество заказов', value: 0 } });
+  const view = render(<A2uiView controller={controller} />);
+  assert.ok(view.getByText('Количество заказов'));
+  assert.equal(view.container.querySelector('.ant-statistic-content-value')?.textContent, '0');
+  assert.equal(view.queryByRole('button'), null); assert.equal(answers, 0);
+  act(() => controller.showComponent({ type: 'metric', props: { title: 'Изменение', value: -12.5, unit: '%' } }));
+  assert.ok(view.getByText('Изменение'));
+  assert.equal(view.container.querySelector('.ant-statistic-content-value')?.textContent, '-12,5');
+  assert.ok(view.getByText('%'));
+  act(() => controller.showComponent({ type: 'clarification', props: {
+    questionId: 'metric-followup', question: 'Продолжить?', options: [{ id: 'yes', label: 'Да' }, { id: 'no', label: 'Нет' }],
+  } }));
+  assert.ok(view.getByRole('button', { name: 'Да' }));
+  assert.equal(view.queryByText('Изменение'), null);
+  cleanup(); controller.dispose();
 });

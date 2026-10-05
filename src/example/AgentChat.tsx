@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ClarificationSurface, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
+import { A2uiView, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
 
 // Это интерфейс адаптера к вашему существующему запросу, не HTTP-клиент.
 type Send = (
@@ -61,6 +61,6 @@ export function AgentChat({ send }: { send: Send }) {
     <button onClick={start}>Запросить график</button>
     <p style={{ whiteSpace: 'pre-wrap' }}>{text}</p>
     {error && <p role="alert">{error}</p>}
-    <ClarificationSurface controller={a2ui.controller} />
+    <A2uiView controller={a2ui.controller} />
   </>;
 }

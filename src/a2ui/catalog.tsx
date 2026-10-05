@@ -1,11 +1,11 @@
-import { Alert, Button, Card, Space, Typography } from 'antd';
+import { Alert, Button, Card, Statistic, Space, Typography } from 'antd';
 import { z } from 'zod';
 import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
 import { createComponentImplementation } from '@a2ui/react/v0_9';
 import { OptionSchema } from './contract.js';
 
-export const CATALOG_ID = 'urn:kxnzee:a2ui:clarification:v1';
-export const SURFACE_ID = 'clarification';
+export const CATALOG_ID = 'urn:kxnzee:a2ui:cards:v1';
+export const SURFACE_ID = 'agent-card';
 
 export const ClarificationApi = {
   name: 'ClarificationCard',
@@ -48,6 +48,21 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
   </Card>
 ));
 
-export const clarificationCatalog = new Catalog(
-  CATALOG_ID, 'v0.9', [ClarificationCard], [],
+export const MetricApi = {
+  name: 'MetricCard',
+  schema: z.object({
+    title: z.string(), value: z.number().finite(), unit: z.string().optional(),
+  }).strict(),
+};
+
+const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
+  <Card>
+    <Statistic title={props.title} value={props.value} suffix={props.unit}
+      groupSeparator=" " decimalSeparator="," />
+  </Card>
+));
+
+// type → зарегистрированная реализация выбирается контроллером явно.
+export const a2uiCatalog = new Catalog(
+  CATALOG_ID, 'v0.9', [ClarificationCard, MetricCard], [],
 );

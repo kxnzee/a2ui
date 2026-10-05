@@ -7,7 +7,7 @@
 ```tsx
 import {
   useA2ui,
-  ClarificationSurface,
+  A2uiView,
   type ClarificationAnswer,
 } from './features/a2ui';
 
@@ -59,7 +59,7 @@ request.cancel();
 
 ```tsx
 <YourExistingMessageList />
-<ClarificationSurface controller={a2ui.controller} />
+<A2uiView controller={a2ui.controller} />
 <YourExistingComposer />
 ```
 
@@ -68,11 +68,11 @@ request.cancel();
 ## 5. Контракт для локального агента
 
 ```ts
-import { CLARIFICATION_INSTRUCTIONS } from './features/a2ui';
-const systemPrompt = `${yourExistingPrompt}\n\n${CLARIFICATION_INSTRUCTIONS}`;
+import { A2UI_INSTRUCTIONS } from './features/a2ui';
+const systemPrompt = `${yourExistingPrompt}\n\n${A2UI_INSTRUCTIONS}`;
 ```
 
-Интернет модели не нужен. Добавьте строку к инструкциям в существующей интеграции. Модель должна выдавать `<clarification>JSON</clarification>` с полями `questionId`, `question`, `options`; каждый вариант содержит `id`, `label`. Пример и ограничения есть в `src/a2ui/README.md`, проверка — в `contract.ts`. Модель не получает React-код.
+Интернет модели не нужен. Добавьте строку к инструкциям в существующей интеграции. Модель должна выдавать `<ui>JSON</ui>` с полями `type`, `props`. Для `type: "clarification"` props содержат `questionId`, `question`, `options`; для `type: "metric"` — `title`, числовой `value` и необязательный `unit`. Пример и ограничения есть в `src/a2ui/README.md`, проверка — в `contract.ts`. Модель не получает React-код.
 
 После клика ваш `onAnswer` получает:
 
@@ -82,6 +82,24 @@ const systemPrompt = `${yourExistingPrompt}\n\n${CLARIFICATION_INSTRUCTIONS}`;
 
 Ваш существующий запрос отправляет ответ в тот же диалог; следующий ответ проходит через новый `beginResponse`. Невалидный JSON отклоняется UI, а не исправляется скрыто; повтор генерации или constrained decoding при необходимости настраиваются в вашей интеграции.
 
+## Примеры выбора двух компонентов
+
+Для уточнения агент выдаёт:
+
+```text
+<ui>{"type":"clarification","props":{"questionId":"metric-1","question":"Что показать?","options":[{"id":"revenue","label":"Выручка"},{"id":"orders","label":"Заказы"}]}}</ui>
+```
+
+Для известного числового результата:
+
+```text
+<ui>{"type":"metric","props":{"title":"Выручка","value":1250000,"unit":"₽"}}</ui>
+```
+
+Это один декодер и один хук для обоих компонентов. Текущая карточка заменяется следующим блоком. `metric` не вызывает `onAnswer`. Инструкции выбора включены в `A2UI_INSTRUCTIONS`: clarification для недостающего выбора, metric для известного числа; если числа нет, агент не должен его выдумывать.
+
+Старый тег `<clarification>` заменён на `<ui>`; старые названия API заменены на общие A2UI-имена. Полная карта обновления есть в README модуля.
+
 ## Регистрация других компонентов
 
-Меняйте `src/a2ui/catalog.tsx`: схема → `createComponentImplementation` с вашим React/AntD-компонентом → добавление в `Catalog`. Контроллер преобразует разрешённый JSON в `createSurface`, `updateDataModel`, `updateComponents`, а `ClarificationSurface` передаёт модель в `A2uiSurface`. Для нового типа карточки расширьте контракт и явное преобразование в контроллере. Чат и транспорт для этого менять не нужно, если события остаются совместимы с вашим callback.
+Меняйте `src/a2ui/catalog.tsx`: схема → `createComponentImplementation` с вашим React/AntD-компонентом → добавление в `Catalog`. Контроллер преобразует разрешённый JSON в `createSurface`, `updateDataModel`, `updateComponents`, а `A2uiView` передаёт модель в `A2uiSurface`. Для нового типа карточки расширьте контракт и явное преобразование в контроллере. Чат и транспорт для этого менять не нужно, если события остаются совместимы с вашим callback.
