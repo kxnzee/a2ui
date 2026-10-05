@@ -20,12 +20,12 @@ function Demo() {
     if (sending.current) return;
     sending.current = true;
     const current = generation.current;
-    const surface = a2ui.processor.getSurface(message.action.surfaceId);
+    const surface = a2ui.processor.model.getSurface(message.action.surfaceId);
     const setDisabled = (value: boolean) => {
-      if (current === generation.current && a2ui.processor.getSurface(message.action.surfaceId) === surface) {
-        a2ui.processor.processMessages({ version: 'v0.9', updateDataModel: {
+      if (current === generation.current && a2ui.processor.model.getSurface(message.action.surfaceId) === surface) {
+        a2ui.processor.processMessages([{ version: 'v0.9', updateDataModel: {
           surfaceId: message.action.surfaceId, path: '/disabled', value,
-        } });
+        } }]);
       }
     };
     setDisabled(true);
@@ -97,7 +97,7 @@ function Demo() {
         <Checkbox checked={failSend} onChange={e => setFailSend(e.target.checked)}>Эмулировать ошибку отправки</Checkbox>
       </Space>
       <Card title={streaming ? 'Агент печатает…' : 'Ответ агента'}><div className="message">{text || 'Нажмите «Запустить».'}</div></Card>
-      {error && <Alert type="error" title={error} />}
+      {error && <Alert type="error" message={error} />}
       <A2uiView processor={a2ui.processor} />
       {answer && <Card title="Событие для существующего запроса"><pre>{JSON.stringify(answer, null, 2)}</pre></Card>}
     </main>

@@ -5,7 +5,7 @@ export default defineConfig({
     outDir: 'dist/lib',
     lib: { entry: 'src/a2ui/index.ts', formats: ['es'], fileName: 'index' },
     rolldownOptions: {
-      external: id => /^(react|react-dom|antd|zod|@a2ui\/react|@a2ui\/web_core)(\/|$)/.test(id),
+      external: id => /^(react|react-dom|antd|zod|zod-a2ui|@a2ui\/react|@a2ui\/web_core)(\/|$)/.test(id),
     },
   },
 });

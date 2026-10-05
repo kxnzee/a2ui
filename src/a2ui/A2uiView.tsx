@@ -3,9 +3,9 @@ import { A2uiSurface } from '@a2ui/react/v0_9';
 import type { A2uiProcessor } from './processor.js';
 
 export function A2uiView({ processor }: { processor: A2uiProcessor }) {
-  const [surfaces, setSurfaces] = useState(() => [...processor.getSurfaces().values()]);
+  const [surfaces, setSurfaces] = useState(() => [...processor.model.surfacesMap.values()]);
   useEffect(() => {
-    const sync = () => setSurfaces([...processor.getSurfaces().values()]);
+    const sync = () => setSurfaces([...processor.model.surfacesMap.values()]);
     const created = processor.onSurfaceCreated(sync);
     const deleted = processor.onSurfaceDeleted(sync);
     sync();

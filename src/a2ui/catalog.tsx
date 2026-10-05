@@ -1,5 +1,5 @@
 import { Button, Card, Statistic, Space } from 'antd';
-import { z } from 'zod';
+import { z } from 'zod-a2ui';
 import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
 import { createComponentImplementation } from '@a2ui/react/v0_9';
 
@@ -17,7 +17,8 @@ export const ClarificationApi = {
   schema: z.object({
     question: CommonSchemas.DynamicString,
     options: z.array(OptionSchema).min(2).max(6).refine(options => new Set(options.map(o => o.id)).size === options.length, 'ID вариантов должны быть уникальны'),
-    selected: CommonSchemas.DynamicString.refine(writablePath, 'selected требует абсолютный data binding'),
+    // Сохраняем REF-description: binder SDK 0.11 распознаёт DynamicString по нему.
+    selected: CommonSchemas.DynamicString.refine(writablePath, 'selected требует абсолютный data binding').describe(CommonSchemas.DynamicString.description!),
     disabled: CommonSchemas.DynamicBoolean.optional(),
     onSelect: CommonSchemas.Action,
   }).strict().describe('Уточнение с 2–6 вариантами. selected привяжи к data model. При выборе вызывается onSelect; context действия может ссылаться на selected.'),
@@ -25,7 +26,7 @@ export const ClarificationApi = {
 
 const ClarificationCard = createComponentImplementation(ClarificationApi, ({ props }) => (
   <Card title={<span style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{props.question}</span>}>
-    <Space orientation="vertical" style={{ width: '100%' }}>
+    <Space direction="vertical" style={{ width: '100%' }}>
       <Space wrap>
         {props.options.map(option => (
           <Button
@@ -69,5 +70,5 @@ onSelect — event с name="clarification_answer" и context: questionId (ID в�
 
 // Одна регистрация служит renderer, валидации и экспорту JSON Schema агенту.
 export const a2uiCatalog = new Catalog(
-  CATALOG_ID, 'v0.9', [ClarificationCard, MetricCard], [], undefined, CATALOG_INSTRUCTIONS,
+  CATALOG_ID, [ClarificationCard, MetricCard],
 );

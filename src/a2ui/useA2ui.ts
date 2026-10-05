@@ -25,7 +25,7 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
     let ended = false;
     const decoder = createA2uiStream({
       ...options,
-      onMessage: message => processor.processMessages(message),
+      onMessage: message => processor.processMessages([message]),
     });
     const response: A2uiResponse = {
       push(delta) { if (!ended) decoder.push(delta); },
@@ -47,8 +47,8 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
 
   const clear = useCallback(() => {
     active.current?.cancel();
-    for (const surfaceId of processor.getSurfaces().keys()) {
-      processor.processMessages({ version: 'v0.9', deleteSurface: { surfaceId } });
+    for (const surfaceId of processor.model.surfacesMap.keys()) {
+      processor.processMessages([{ version: 'v0.9', deleteSurface: { surfaceId } }]);
     }
   }, [processor]);
 
@@ -59,7 +59,7 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
       active.current?.cancel();
       // StrictMode повторяет setup/cleanup эффекта. Закрываем processor
       // только если за cleanup не последовал повторный setup.
-      queueMicrotask(() => { if (!mounted.current) processor.dispose(); });
+      queueMicrotask(() => { if (!mounted.current) processor.model.dispose(); });
     };
   }, [processor]);
 

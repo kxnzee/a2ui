@@ -15,22 +15,22 @@ const { A2uiView, createA2uiProcessor, useA2ui } = await import('../src/a2ui/ind
 const { StrictMode } = await import('react');
 after(() => dom.window.close());
 
-test('AntD choices forward the SDK action; host application controls disabled state', async () => {
+test('AntD choices and bindings work in StrictMode; host controls disabled state', async () => {
   const answers: unknown[] = [];
   const processor = createA2uiProcessor(message => { answers.push(message); });
   processor.processMessages(questionMessages());
-  const view = render(<A2uiView processor={processor} />);
+  const view = render(<StrictMode><A2uiView processor={processor} /></StrictMode>);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
   await waitFor(() => assert.equal(answers.length, 1));
   assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, false);
   assert.equal(view.queryByText('Вы выбрали: Выручка'), null);
-  act(() => processor.processMessages({ version: 'v0.9', updateDataModel: {
+  act(() => processor.processMessages([{ version: 'v0.9', updateDataModel: {
     surfaceId: 'question', path: '/disabled', value: true,
-  } }));
+  } }]));
   assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
-  act(() => { processor.processMessages(removeQuestion); processor.processMessages(questionMessages('next')); });
+  act(() => { processor.processMessages([removeQuestion]); processor.processMessages(questionMessages('next')); });
   assert.equal((view.getByRole('button', { name: 'Количество заказов' }) as HTMLButtonElement).disabled, false);
-  cleanup(); processor.dispose();
+  cleanup(); processor.model.dispose();
 });
 
 test('hook handles StrictMode, replacement, latest action callback, clear and unmount', async () => {
@@ -43,32 +43,44 @@ test('hook handles StrictMode, replacement, latest action callback, clear and un
   const second = hook.result.current.beginResponse({ onText: t => text.push(t) });
   act(() => { first.push(frame(questionMessages())); second.push(`Текст${frame(questionMessages())}`); second.finish(); });
   second.push('late'); assert.deepEqual(text, ['Текст']);
-  assert.equal(hook.result.current.processor.getSurfaces().size, 1);
+  assert.equal(hook.result.current.processor.model.surfacesMap.size, 1);
   hook.rerender({ version: 'new' });
   const view = render(<A2uiView processor={hook.result.current.processor} />);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
   await waitFor(() => assert.deepEqual(answers, ['new']));
-  act(() => hook.result.current.clear()); assert.equal(hook.result.current.processor.getSurfaces().size, 0);
+  act(() => hook.result.current.clear()); assert.equal(hook.result.current.processor.model.surfacesMap.size, 0);
   const final = hook.result.current.beginResponse({ onText: t => text.push(t) });
   const processor = hook.result.current.processor;
   view.unmount(); hook.unmount(); await Promise.resolve();
   final.push(frame(questionMessages())); final.finish(); assert.deepEqual(text, ['Текст']);
-  assert.equal(processor.getSurfaces().size, 0); cleanup();
+  assert.equal(processor.model.surfacesMap.size, 0); cleanup();
 });
 
 test('standard component and model updates render zero, negative decimal and multiple surfaces', () => {
   const processor = createA2uiProcessor(() => {});
   const messages = metricMessages();
   if ('updateComponents' in messages[1]) Object.assign(messages[1].updateComponents.components[0], { value: 0, title: 'Заказы' });
-  messages.forEach(m => processor.processMessages(m));
+  messages.forEach(m => processor.processMessages([m]));
   const view = render(<A2uiView processor={processor} />);
   assert.equal(view.container.querySelector('.ant-statistic-content-value')?.textContent, '0');
-  act(() => processor.processMessages({ version: 'v0.9', updateComponents: { surfaceId: 'result', components: [{
+  act(() => processor.processMessages([{ version: 'v0.9', updateComponents: { surfaceId: 'result', components: [{
     id: 'root', component: 'MetricCard', title: 'Изменение', value: -12.5, unit: '%',
-  }] } }));
+  }] } }]));
   assert.ok(view.getByText('Изменение')); assert.ok(view.getByText('%'));
   assert.equal(view.container.querySelector('.ant-statistic-content-value')?.textContent, '-12,5');
-  act(() => questionMessages().forEach(m => processor.processMessages(m)));
+  act(() => questionMessages().forEach(m => processor.processMessages([m])));
   assert.ok(view.getByRole('button', { name: 'Выручка' })); assert.ok(view.getByText('Изменение'));
-  act(() => { for (const surfaceId of processor.getSurfaces().keys()) processor.processMessages({ version: 'v0.9', deleteSurface: { surfaceId } }); }); assert.equal(view.container.textContent, ''); cleanup(); processor.dispose();
+  act(() => { for (const surfaceId of processor.model.surfacesMap.keys()) processor.processMessages([{ version: 'v0.9', deleteSurface: { surfaceId } }]); }); assert.equal(view.container.textContent, ''); cleanup(); processor.model.dispose();
+});
+
+
+test('web_core 0.11 renders unknown components as SDK placeholders', () => {
+  const processor = createA2uiProcessor(() => {});
+  processor.processMessages(metricMessages());
+  const view = render(<A2uiView processor={processor} />);
+  act(() => processor.processMessages([{ version: 'v0.9', updateComponents: {
+    surfaceId: 'result', components: [{ id: 'root', component: 'Unknown' }],
+  } }]));
+  assert.ok(view.getByText(/Unknown component:/));
+  cleanup(); processor.model.dispose();
 });
