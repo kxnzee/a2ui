@@ -16,7 +16,8 @@
   "files": [
     "dist/lib",
     "README.md",
-    "docs"
+    "docs",
+    "src/a2ui"
   ],
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -27,7 +28,8 @@
     "build": "npm run build:demo && npm run build:lib",
     "preview": "vite preview --host 127.0.0.1",
     "package:demo": "node scripts/package-demo.mjs",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "package:a2ui": "node scripts/package-a2ui.mjs"
   },
   "dependencies": {
     "@a2ui/react": "0.12.0",

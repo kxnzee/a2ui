@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
@@ -9,8 +9,8 @@ for (const key of ['window', 'document', 'Document', 'CSSStyleSheet', 'customEle
 Object.defineProperty(globalThis, 'getComputedStyle', { value: dom.window.getComputedStyle.bind(dom.window), configurable: true });
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, writable: true });
 dom.window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false, media: '', onchange: null });
-const { render, fireEvent, waitFor, act, cleanup } = await import('@testing-library/react');
-const { ClarificationSurface, createClarificationController } = await import('../src/ui/index.js');
+const { render, renderHook, fireEvent, waitFor, act, cleanup } = await import('@testing-library/react');
+const { ClarificationSurface, createClarificationController, useA2ui } = await import('../src/a2ui/index.js');
 
 test('AntD buttons send selected payload, show retry and render replacement question', async () => {
   const answers: unknown[] = []; let fail = true;
@@ -27,5 +27,41 @@ test('AntD buttons send selected payload, show retry and render replacement ques
   act(() => controller.showQuestion({ ...question, questionId: 'q2', question: 'Следующий вопрос' }));
   assert.ok(view.getByText('Следующий вопрос'));
   assert.equal((view.getByRole('button', { name: 'Заказы' }) as HTMLButtonElement).disabled, false);
-  cleanup(); controller.dispose(); dom.window.close();
+  cleanup(); controller.dispose();
+});
+
+const { StrictMode } = await import('react');
+after(() => dom.window.close());
+
+test('portable hook handles StrictMode, response replacement, latest callback and unmount', async () => {
+  const answers: string[] = []; const text: string[] = [];
+  const question = { questionId: 'hook-q1', question: 'Вопрос хука', options: [{ id: 'a', label: 'Первый' }, { id: 'b', label: 'Второй' }] };
+  const block = `<clarification>${JSON.stringify(question)}</clarification>`;
+  const hook = renderHook(({ version }) => useA2ui({ onAnswer: () => { answers.push(version); } }), {
+    initialProps: { version: 'old' },
+    wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
+  });
+  await act(async () => {}); // deferred StrictMode cleanup must not dispose the live instance
+  const first = hook.result.current.beginResponse({ onText: t => text.push(t) });
+  first.push('<clarif');
+  const second = hook.result.current.beginResponse({ onText: t => text.push(t) });
+  act(() => { first.push(block); second.push(`Текст${block}`); second.finish(); });
+  second.push('late');
+  assert.deepEqual(text, ['Текст']);
+  assert.equal(hook.result.current.controller.getQuestionId(), 'hook-q1');
+  hook.rerender({ version: 'new' });
+  const view = render(<ClarificationSurface controller={hook.result.current.controller} />);
+  fireEvent.click(view.getByRole('button', { name: 'Первый' }));
+  await waitFor(() => assert.deepEqual(answers, ['new']));
+  act(() => hook.result.current.clear());
+  assert.equal(hook.result.current.controller.getSnapshot(), undefined);
+  assert.equal(view.queryByRole('button', { name: 'Первый' }), null);
+  const final = hook.result.current.beginResponse({ onText: t => text.push(t) });
+  const controller = hook.result.current.controller;
+  view.unmount(); hook.unmount();
+  await Promise.resolve();
+  final.push(block); final.finish();
+  assert.deepEqual(text, ['Текст']);
+  assert.throws(() => controller.showQuestion(question), /закрыт/);
+  cleanup();
 });

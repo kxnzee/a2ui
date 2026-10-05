@@ -1,8 +1,8 @@
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { NodeResolver, getValue, WritableBinding } from '@a2ui/web_core/v0_9';
-import { createClarificationController } from '../src/ui/controller.js';
-import { clarificationCatalog } from '../src/ui/catalog.js';
+import { createClarificationController } from '../src/a2ui/controller.js';
+import { clarificationCatalog } from '../src/a2ui/catalog.js';
 const q = { questionId: 'q1', question: 'Что показать?', options: [{ id: 'a', label: 'Выручка' }, { id: 'b', label: 'Заказы' }] };
 const resolvers: NodeResolver[] = [];
 afterEach(() => { for (const r of resolvers.splice(0)) r.dispose(); });

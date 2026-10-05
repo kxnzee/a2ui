@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Alert, Button, Card, Checkbox, ConfigProvider, Space, Typography } from 'antd';
-import { ClarificationSurface, createClarificationController, createClarificationStream, type ClarificationAnswer } from '../ui/index.js';
+import { ClarificationSurface, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
 import './style.css';
 
 function Demo() {
@@ -13,23 +13,22 @@ function Demo() {
   const failRef = useRef(false);
   const cancelRef = useRef<() => void>(() => {});
   failRef.current = failSend;
-  const controller = useMemo(() => createClarificationController(async selected => {
+  const a2ui = useA2ui({ onAnswer: async selected => {
     // Здесь подключается уже существующий запрос приложения.
     await new Promise(resolve => setTimeout(resolve, 400));
-    if (controller.getQuestionId() !== selected.questionId) return;
+    if (a2ui.controller.getQuestionId() !== selected.questionId) return;
     if (failRef.current) throw new Error('Демонстрационная ошибка');
     setAnswer(selected);
     play(`Спасибо! Вы выбрали «${selected.label}». Теперь агент может продолжить ответ.`);
-  }), []);
+  } });
 
   function play(response: string) {
     cancelRef.current();
     setText('');
     setError('');
     setStreaming(true);
-    const decoder = createClarificationStream({
+    const decoder = a2ui.beginResponse({
       onText: delta => setText(value => value + delta),
-      onClarification: question => controller.showQuestion(question),
       onError: e => setError(e.message),
     });
     // Эмулятор выдаёт по одному символу: теги и JSON разорваны между чанками.
@@ -44,10 +43,10 @@ function Demo() {
     }, 8);
     cancelRef.current = () => { clearInterval(timer); decoder.cancel(); };
   }
-  useEffect(() => () => { cancelRef.current(); controller.dispose(); }, [controller]);
+  useEffect(() => () => { cancelRef.current(); }, []);
 
   function start() {
-    controller.clear();
+    a2ui.clear();
     setAnswer(undefined);
     const question = {
       questionId: `metric-${Date.now()}`, question: 'Какой показатель показать на графике?',
@@ -66,7 +65,7 @@ function Demo() {
       </Space>
       <Card title={streaming ? 'Агент печатает…' : 'Ответ агента'}><div className="message">{text || 'Нажмите «Запустить».'}</div></Card>
       {error && <Alert type="error" title={error} />}
-      <ClarificationSurface controller={controller} />
+      <ClarificationSurface controller={a2ui.controller} />
       {answer && <Card title="Событие для существующего запроса"><pre>{JSON.stringify(answer, null, 2)}</pre></Card>}
     </main>
   </ConfigProvider>;

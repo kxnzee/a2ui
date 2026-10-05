@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createClarificationStream } from '../src/ui/stream.js';
+import { createClarificationStream } from '../src/a2ui/stream.js';
 const question = { questionId: 'q1', question: 'Что показать?', options: [{ id: 'a', label: 'Выручка' }, { id: 'b', label: 'Заказы' }] };
 const block = `<clarification>${JSON.stringify(question)}</clarification>`;
 test('every split boundary preserves text and produces exactly one complete card', () => {

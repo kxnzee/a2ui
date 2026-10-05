@@ -4,9 +4,9 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "rootDir": "src/ui",
+    "rootDir": "src/a2ui",
     "outDir": "dist/lib/types"
   },
-  "include": ["src/ui"],
+  "include": ["src/a2ui"],
   "exclude": ["tests", "src/demo"]
 }

@@ -1,140 +1,87 @@
-# Подключение к вашему React-приложению
+# Подключение к уже готовому UI и чату
 
-Сначала фронт: существующий запрос должен предоставлять callbacks для **текстовых дельт**, завершения и ошибки. В примере ниже `send` — адаптер к вашему уже подключённому запросу, не новая HTTP-реализация.
+Переносите **только [`src/a2ui`](../src/a2ui)**. Полная карта файлов, зависимости и API находятся в [README модуля](../src/a2ui/README.md). [`src/example/AgentChat.tsx`](../src/example/AgentChat.tsx) — компилируемый пример внешнего адаптера; копировать его необязательно. [`src/demo`](../src/demo) — только демонстрация с эмуляцией стрима.
+
+## 1. Подключить хук в вашем компоненте чата
 
 ```tsx
-import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  useA2ui,
   ClarificationSurface,
-  createClarificationController,
-  createClarificationStream,
   type ClarificationAnswer,
-} from '@kxnzee/a2ui-clarification-ui';
-// При копировании исходников: import ... from './ui/index';
+} from './features/a2ui';
 
-type Send = (
-  input: string | ClarificationAnswer,
-  callbacks: {
-    onTextDelta: (delta: string) => void;
-    onDone: () => void;
-    onError: (error: Error) => void;
+const a2ui = useA2ui({
+  onAnswer: async (answer: ClarificationAnswer) => {
+    // Ваша существующая отправка в тот же диалог.
+    // Если запрос принимает только текст, адаптируйте answer здесь.
+    await existingSendAnswer(answer);
   },
-) => { accepted: Promise<void>; cancel: () => void };
-
-export function AgentChat({ send }: { send: Send }) {
-  const [text, setText] = useState('');
-  const [error, setError] = useState('');
-  const sendRef = useRef(send);
-  sendRef.current = send;
-  const active = useRef<(() => void) | undefined>(undefined);
-  const mounted = useRef(true);
-  const requestRef = useRef<(input: string | ClarificationAnswer) => Promise<void>>(
-    async () => {},
-  );
-  const controller = useMemo(
-    () => createClarificationController(answer => requestRef.current(answer)),
-    [],
-  );
-
-  requestRef.current = async input => {
-    active.current?.();
-    setText('');
-    setError('');
-    // Новый декодер на каждый ответ агента, один контроллер на диалог.
-    const stream = createClarificationStream({
-      onText: delta => { if (mounted.current) setText(t => t + delta); },
-      onClarification: question => controller.showQuestion(question),
-      onError: e => { if (mounted.current) setError(e.message); },
-    });
-    let cancelled = false;
-    const request = sendRef.current(input, {
-      onTextDelta: delta => { if (!cancelled) stream.push(delta); },
-      onDone: () => { if (!cancelled) stream.finish(); },
-      onError: e => {
-        stream.cancel();
-        cancelled = true;
-        if (mounted.current) setError(e.message);
-      },
-    });
-    active.current = () => {
-      cancelled = true;
-      stream.cancel();
-      request.cancel();
-    };
-    await request.accepted; // rejected → карточка покажет ошибку и позволит повторить
-  };
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      active.current?.();
-      // React StrictMode повторяет setup/cleanup эффектов в dev.
-      // Отложенное dispose выполняется только при реальном unmount.
-      queueMicrotask(() => { if (!mounted.current) controller.dispose(); });
-    };
-  }, [controller]);
-
-  async function start() {
-    controller.clear();
-    try { await requestRef.current('Покажи график с цифрами'); }
-    catch { setError('Не удалось отправить запрос'); }
-  }
-
-  return <>
-    <button onClick={start}>Запросить график</button>
-    <p style={{ whiteSpace: 'pre-wrap' }}>{text}</p>
-    {error && <p role="alert">{error}</p>}
-    <ClarificationSurface controller={controller} />
-  </>;
-}
+});
 ```
 
-`send` должен завершать `accepted` при принятии сообщения агентом (или завершении ответа, если так устроен ваш транспорт). Ошибка до принятия должна отклонять этот Promise: один вызов `onError` без rejection не разблокирует карточку. `cancel` прекращает доставку callbacks. На стороне приложения для ответа можно передавать весь объект либо превратить его в текст, например `answer.label`. Не запускайте два запроса одного диалога одновременно. Для нескольких диалогов создайте отдельные контроллеры.
+Хук не отправляет запрос. Его `onAnswer` только вызывает ваш callback; возвращаемый Promise определяет успех/ошибку отправки для карточки.
 
-Обычный текст чата берите из `onText` декодера: если параллельно выводить исходные чанки, пользователю будут видны служебные теги и JSON. При завершении обязательно вызывайте `finish`, при отмене — `cancel`. Существующий чат может хранить сообщения в истории вместо одного поля `text`, как в этом минимальном примере.
+## 2. Перед запросом создать декодер ответа
 
-## Что передать локальной модели
+```tsx
+const response = a2ui.beginResponse({
+  onText: delta => appendToMessage(messageId, delta), // Ваш store чата.
+  onError: error => setMessageError(messageId, error.message),
+});
+```
 
-Интернет модели не нужен. Добавьте локальную строку `CLARIFICATION_INSTRUCTIONS` к вашим существующим инструкциям агента:
+Создавайте `response` один раз перед каждым ответом агента, включая ответ после выбора варианта. Привяжите callbacks к конкретному сообщению. Когда начинается следующий ответ, старый декодер автоматически отменяется. Модуль поддерживает один активный ответ на экземпляр хука.
+
+## 3. Подключить существующий стрим
+
+```tsx
+// В вашей существующей интеграции:
+const request = existingStreamingRequest(input, {
+  onTextDelta: response.push,
+  onDone: response.finish,
+  onError: error => {
+    response.cancel();
+    setMessageError(messageId, error.message);
+  },
+});
+
+// При пользовательской отмене:
+response.cancel();
+request.cancel();
+```
+
+Имена callbacks адаптируйте к вашему транспорту. Здесь принимаются уже извлечённые строковые дельты. Для отмены/ошибки транспорта вызовите `cancel`; для нормального окончания — `finish`. Ошибка отправки ответа также должна отклонять Promise в `onAnswer`: одного транспортного callback `onError` недостаточно для повтора в карточке.
+
+Если ваш UI уже отображает все исходные чанки, переключите именно текст сообщения на `onText` декодера. Иначе в чате будет виден служебный JSON. История, markdown, загрузка, скролл, запрос и сетевые ошибки принадлежат вашему чату.
+
+## 4. Добавить поверхность в существующую разметку
+
+```tsx
+<YourExistingMessageList />
+<ClarificationSurface controller={a2ui.controller} />
+<YourExistingComposer />
+```
+
+`YourExisting…` обозначают ваши компоненты; модуль не заменяет их. Поверхность показывает текущую карточку; историю карточек пример не сохраняет. При сбросе диалога вызовите `a2ui.clear()`. При смене диалога размонтируйте компонент хука (например, через `key={conversationId}`) или явно отмените транспорт и очистите модуль. Транспорт отменяет приложение; хук отменяет только декодер.
+
+## 5. Контракт для локального агента
 
 ```ts
-import { CLARIFICATION_INSTRUCTIONS } from '@kxnzee/a2ui-clarification-ui';
+import { CLARIFICATION_INSTRUCTIONS } from './features/a2ui';
 const systemPrompt = `${yourExistingPrompt}\n\n${CLARIFICATION_INSTRUCTIONS}`;
 ```
 
-Это не выполняет запрос; вы передаёте `systemPrompt` в свою интеграцию. Ожидаемый ответ агента в текстовом стриме:
+Интернет модели не нужен. Добавьте строку к инструкциям в существующей интеграции. Модель должна выдавать `<clarification>JSON</clarification>` с полями `questionId`, `question`, `options`; каждый вариант содержит `id`, `label`. Пример и ограничения есть в `src/a2ui/README.md`, проверка — в `contract.ts`. Модель не получает React-код.
 
-```text
-Уточню один момент.
-<clarification>{"questionId":"metric-1","question":"Какой показатель показать?","options":[{"id":"revenue","label":"Выручка"},{"id":"orders","label":"Заказы"}]}</clarification>
-```
-
-Можно разделить эту строку на любые чанки. Пока блок не завершён, карточки нет. После клика UI отдаёт:
+После клика ваш `onAnswer` получает:
 
 ```json
 {"type":"clarification_answer","questionId":"metric-1","optionId":"orders","label":"Заказы"}
 ```
 
-Ваш существующий транспорт отправляет этот объект или его текстовое представление в тот же диалог. Агент продолжает ответ обычным текстом либо задаёт следующий вопрос с новым `questionId`. Каждому новому вопросу нужен новый идентификатор. Повтор идентичного текущего вопроса не сбрасывает его состояние; изменение вопроса при том же идентификаторе отклоняется.
+Ваш существующий запрос отправляет ответ в тот же диалог; следующий ответ проходит через новый `beginResponse`. Невалидный JSON отклоняется UI, а не исправляется скрыто; повтор генерации или constrained decoding при необходимости настраиваются в вашей интеграции.
 
-Контракт строго разрешает поля `questionId`, `question`, `options`; 2–6 вариантов с уникальными `id`; вопрос до 600 символов, подпись до 160. JSON без Markdown внутри тегов, без `</clarification>` в строковых значениях. Ограничение блока — 32 Ки символов. Если ваши инструкции/модель не поддерживают такой ответ, из одного обычного текста UI надёжно не узнает варианты.
+## Регистрация других компонентов
 
-## Где регистрируется собственный компонент
-
-В `src/ui/catalog.tsx`:
-
-```tsx
-import { z } from 'zod';
-import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
-import { createComponentImplementation } from '@a2ui/react/v0_9';
-import { Card } from 'antd';
-
-const api = { name: 'MyCard', schema: z.object({ title: z.string() }).strict() };
-const implementation = createComponentImplementation(api, ({ props }) => (
-  <Card title={props.title} />
-));
-const catalog = new Catalog('urn:my-app:catalog:v1', 'v0.9', [implementation], []);
-```
-
-В рабочем примере `ClarificationCard` дополнительно использует `CommonSchemas.Action` для события и DynamicString/DynamicBoolean для состояния. Контроллер создаёт `MessageProcessor([clarificationCatalog], onAction)`, сообщения `createSurface`, `updateDataModel`, `updateComponents`; `ClarificationSurface` передаёт созданную поверхность в `A2uiSurface`. Обработчик события сопоставляет вариант с проверенным вопросом, затем вызывает callback приложения. Для следующего компонента добавьте схему, React-реализацию и явный адаптер в контроллере. Агенту передавайте разрешённый JSON-контракт нового компонента и примеры, а не произвольный JSX.
+Меняйте `src/a2ui/catalog.tsx`: схема → `createComponentImplementation` с вашим React/AntD-компонентом → добавление в `Catalog`. Контроллер преобразует разрешённый JSON в `createSurface`, `updateDataModel`, `updateComponents`, а `ClarificationSurface` передаёт модель в `A2uiSurface`. Для нового типа карточки расширьте контракт и явное преобразование в контроллере. Чат и транспорт для этого менять не нужно, если события остаются совместимы с вашим callback.

@@ -12,7 +12,12 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run package:demo
+      - run: npm run package:a2ui
       - uses: actions/upload-artifact@v4
         with:
           name: clarification-demo
-          path: releases/*
+          path: releases/a2ui-clarification-demo.tar.gz*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a2ui-source
+          path: releases/a2ui-source.tar.gz*

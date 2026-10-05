@@ -1,12 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ClarificationSurface,
-  createClarificationController,
-  createClarificationStream,
-  type ClarificationAnswer,
-} from '../ui/index.js';
-// При копировании исходников: import ... from './ui/index';
+import { useEffect, useRef, useState } from 'react';
+import { ClarificationSurface, useA2ui, type ClarificationAnswer } from '../a2ui/index.js';
 
+// Это интерфейс адаптера к вашему существующему запросу, не HTTP-клиент.
 type Send = (
   input: string | ClarificationAnswer,
   callbacks: {
@@ -16,62 +11,48 @@ type Send = (
   },
 ) => { accepted: Promise<void>; cancel: () => void };
 
+// Только пример чата. Для переноса нужен лишь каталог src/a2ui.
 export function AgentChat({ send }: { send: Send }) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');
-  const sendRef = useRef(send);
-  sendRef.current = send;
-  const active = useRef<(() => void) | undefined>(undefined);
-  const mounted = useRef(true);
-  const requestRef = useRef<(input: string | ClarificationAnswer) => Promise<void>>(
-    async () => {},
-  );
-  const controller = useMemo(
-    () => createClarificationController(answer => requestRef.current(answer)),
-    [],
-  );
+  const cancelRequest = useRef<(() => void) | undefined>(undefined);
+  const requestRef = useRef<(input: string | ClarificationAnswer) => Promise<void>>(async () => {});
+  const a2ui = useA2ui({ onAnswer: answer => requestRef.current(answer) });
 
   requestRef.current = async input => {
-    active.current?.();
+    cancelRequest.current?.();
     setText('');
     setError('');
-    // Новый декодер на каждый ответ агента, один контроллер на диалог.
-    const stream = createClarificationStream({
-      onText: delta => { if (mounted.current) setText(t => t + delta); },
-      onClarification: question => controller.showQuestion(question),
-      onError: e => { if (mounted.current) setError(e.message); },
+    const response = a2ui.beginResponse({
+      onText: delta => setText(t => t + delta), // Ваш существующий store сообщений.
+      onError: e => setError(e.message),
     });
     let cancelled = false;
-    const request = sendRef.current(input, {
-      onTextDelta: delta => { if (!cancelled) stream.push(delta); },
-      onDone: () => { if (!cancelled) stream.finish(); },
-      onError: e => {
-        stream.cancel();
+    try {
+      const request = send(input, {
+        onTextDelta: response.push,
+        onDone: response.finish,
+        onError: e => {
+          response.cancel();
+          if (!cancelled) setError(e.message);
+        },
+      });
+      cancelRequest.current = () => {
         cancelled = true;
-        if (mounted.current) setError(e.message);
-      },
-    });
-    active.current = () => {
-      cancelled = true;
-      stream.cancel();
-      request.cancel();
-    };
-    await request.accepted; // rejected → карточка покажет ошибку и позволит повторить
+        response.cancel();
+        request.cancel(); // Транспорт отменяет приложение, не A2UI.
+      };
+      await request.accepted;
+    } catch (error) {
+      response.cancel();
+      throw error; // Карточка покажет ошибку и позволит повторить выбор.
+    }
   };
 
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      active.current?.();
-      // React StrictMode повторяет setup/cleanup эффектов в dev.
-      // Отложенное dispose выполняется только при реальном unmount.
-      queueMicrotask(() => { if (!mounted.current) controller.dispose(); });
-    };
-  }, [controller]);
+  useEffect(() => () => cancelRequest.current?.(), []);
 
   async function start() {
-    controller.clear();
+    a2ui.clear();
     try { await requestRef.current('Покажи график с цифрами'); }
     catch { setError('Не удалось отправить запрос'); }
   }
@@ -80,6 +61,6 @@ export function AgentChat({ send }: { send: Send }) {
     <button onClick={start}>Запросить график</button>
     <p style={{ whiteSpace: 'pre-wrap' }}>{text}</p>
     {error && <p role="alert">{error}</p>}
-    <ClarificationSurface controller={controller} />
+    <ClarificationSurface controller={a2ui.controller} />
   </>;
 }
