@@ -70,7 +70,7 @@ test('SDK rejects unknown catalog, component, properties and missing surfaces', 
 test('agent configuration comes from the renderer catalog and contains executable standard examples', async () => {
   const { getAgentConfiguration } = await import('../src/a2ui/agent.js');
   const config = getAgentConfiguration();
-  assert.equal(config.catalogSchema, a2uiCatalog.catalogSchema);
+  assert.deepEqual(config.catalogSchema, a2uiCatalog.catalogSchema);
   assert.match(config.instructions, /<a2ui>/);
   assert.deepEqual(config.capabilities['v0.9']?.supportedCatalogIds, [a2uiCatalog.id]);
   assert.ok(config.protocolSchema.$defs.CreateSurfaceMessage);
@@ -84,4 +84,54 @@ test('native A2UI array entrypoint rejects chat history arrays', () => {
   c.processMessages(metricMessages()); assert.equal(c.getSnapshot().length, 1);
   assert.throws(() => c.processMessages([{ role: 'assistant', content: 'text' }]));
   c.dispose();
+});
+
+test('catalog rejects inconsistent clarification actions and overlapping state bindings', () => {
+  const c = createA2uiController(() => {});
+  questionMessages().forEach(message => c.processMessage(message));
+  const message = questionMessages()[2];
+  assert.ok('updateComponents' in message);
+  if (!('updateComponents' in message)) return;
+  const original = message.updateComponents.components[0];
+  for (const modify of [
+    (card: any) => { card.onSelect.event.name = 'wrong'; },
+    (card: any) => { card.onSelect.event.context.questionId = 'wrong'; },
+    (card: any) => { card.onSelect.event.context.optionId = 'orders'; },
+    (card: any) => { card.onSelect.event.context.optionId.path = '/other'; },
+    (card: any) => { card.disabled.path = card.selected.path; },
+    (card: any) => { card.error.path = `${card.selected.path}/nested`; },
+  ]) {
+    const card = structuredClone(original); modify(card);
+    assert.throws(() => c.processMessage({ version: 'v0.9', updateComponents: { surfaceId: 'question', components: [card] } }));
+  }
+  assert.equal(props(c).disabled.value, false); c.dispose();
+});
+
+test('exported agent configuration cannot mutate SDK schemas or subsequent exports', async () => {
+  const { getAgentConfiguration } = await import('../src/a2ui/agent.js');
+  const baseline = getAgentConfiguration(); const exported = getAgentConfiguration();
+  exported.catalogSchema.title = 'mutated';
+  exported.protocolSchema.$defs.CreateSurfaceMessage.required.push("mutated");
+  exported.capabilities['v0.9']!.supportedCatalogIds = [];
+  exported.examples.clarification.length = 0;
+  assert.deepEqual(getAgentConfiguration(), baseline);
+  assert.deepEqual(a2uiCatalog.catalogSchema, baseline.catalogSchema);
+});
+
+test('late action completion does not write into replaced state bindings', async () => {
+  let release!: () => void;
+  const c = createA2uiController(() => new Promise<void>(resolve => { release = resolve; }));
+  questionMessages().forEach(message => c.processMessage(message));
+  const p = props(c); p.selected.set('orders'); p.onSelect();
+  c.processMessage({ version: 'v0.9', updateDataModel: { surfaceId: 'question', path: '/next',
+    value: { selected: '', disabled: false, answered: false, error: '' } } });
+  const message = questionMessages()[2]; assert.ok('updateComponents' in message);
+  if ('updateComponents' in message) {
+    const card = message.updateComponents.components[0];
+    for (const field of ['selected', 'disabled', 'answered', 'error']) card[field] = { path: `/next/${field}` };
+    card.onSelect.event.context.optionId = { path: '/next/selected' }; c.processMessage(message);
+  }
+  release(); await tick(); assert.equal(props(c).answered.value, false); assert.equal(props(c).disabled.value, false);
+  const surface = c.getSnapshot()[0].surface;
+  assert.equal(surface.dataModel.get('/answered'), false); c.dispose();
 });

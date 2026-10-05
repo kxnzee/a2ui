@@ -5,7 +5,6 @@ import { createComponentImplementation } from '@a2ui/react/v0_9';
 import { OptionSchema } from './contract.js';
 
 export const CATALOG_ID = 'urn:kxnzee:a2ui:cards:v1';
-export const SURFACE_ID = 'agent-card';
 
 const writablePath = (value: unknown) => typeof value === 'object' && value !== null &&
   'path' in value && typeof value.path === 'string' && value.path.startsWith('/') && value.path !== '/';
@@ -21,11 +20,26 @@ export const ClarificationApi = {
     answered: CommonSchemas.DynamicBoolean.refine(writablePath, 'answered требует абсолютный data binding'),
     error: CommonSchemas.DynamicString.refine(writablePath, 'error требует абсолютный data binding'),
     onSelect: CommonSchemas.Action,
-  }).strict().describe('Уточнение с 2–6 вариантами. Используй, когда нужен выбор пользователя. selected, disabled, answered, error должны быть data bindings; onSelect — событие clarification_answer с questionId и optionId.'),
+  }).strict().superRefine((card, ctx) => {
+    const bindings = [card.selected, card.disabled, card.answered, card.error]
+      .filter(writablePath).map(value => (value as { path: string }).path);
+    if (bindings.some((path, i) => bindings.some((other, j) => i !== j &&
+      (path === other || path.startsWith(`${other}/`))))) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Пути состояния должны быть раздельными и не вложенными' });
+    }
+    const event = 'event' in card.onSelect ? card.onSelect.event : undefined;
+    const selectedPath = writablePath(card.selected) ? (card.selected as { path: string }).path : undefined;
+    const optionBinding = event?.context?.optionId;
+    if (event?.name !== 'clarification_answer' || event.context?.questionId !== card.questionId ||
+        !writablePath(optionBinding) || (optionBinding as { path: string }).path !== selectedPath) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['onSelect'],
+        message: 'onSelect требует clarification_answer с текущим questionId и optionId, привязанным к selected' });
+    }
+  }).describe('Уточнение с 2–6 вариантами. Используй, когда нужен выбор пользователя. selected, disabled, answered, error должны быть data bindings; onSelect — событие clarification_answer с questionId и optionId.'),
 };
 
 const ClarificationCard = createComponentImplementation(ClarificationApi, ({ props }) => (
-  <Card title={props.question}>
+  <Card title={<span style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{props.question}</span>}>
     <Space orientation="vertical" style={{ width: '100%' }}>
       <Space wrap>
         {props.options.map(option => (
@@ -33,6 +47,7 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
             key={option.id}
             type={props.selected === option.id ? 'primary' : 'default'}
             disabled={props.disabled}
+            style={{ height: 'auto', whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: '100%' }}
             onClick={() => {
               props.setSelected(option.id);
               props.onSelect();
@@ -68,7 +83,7 @@ const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
 
 export const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
 Каждому новому вопросу нужен новый questionId. ID вариантов должны быть уникальны.
-У ClarificationCard selected, disabled, answered, error привяжи к отдельным абсолютным путям data model. Сначала инициализируй их: selected="", disabled=false, answered=false, error="".
+У ClarificationCard selected, disabled, answered, error привяжи к отдельным абсолютным путям data model, не вложенным друг в друга. Сначала инициализируй их: selected="", disabled=false, answered=false, error="".
 onSelect — event с name="clarification_answer" и context: questionId (тот же ID), optionId (binding к selected).
 Действие клиента приходит как стандартное сообщение {version:"v0.9",action:{name,surfaceId,sourceComponentId,timestamp,context}}. После выбора продолжи задачу.
 Корневой компонент имеет id="root". Можно обновлять существующие поверхности; удаляй завершённую карточку через deleteSurface, если она больше не нужна.`;

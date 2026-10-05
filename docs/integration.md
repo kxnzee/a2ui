@@ -77,7 +77,9 @@ const nextMessages = [...existingChatMessages, { role: 'user', content: nextUser
 a2ui.controller.processMessages(a2uiProtocolMessages);
 ```
 
-Этот массив содержит `{version, createSurface/updateComponents/…}`, а не `{role, content}`. Для массива chat messages сначала извлеките содержимое нужного assistant-сообщения своим адаптером. Пример обоих режимов с импортами и callbacks — src/example/AgentChat.tsx.
+Этот массив содержит `{version, createSurface/updateComponents/…}`, а не `{role, content}`. Для массива chat messages сначала извлеките содержимое нужного assistant-сообщения своим адаптером. Пример обоих режимов с импортами и callbacks — `src/example/AgentChat.tsx` и `src/example/request.ts`.
+
+У `AgentChat` передайте `send`, текущие `messages`, `onMessagesChange` (например, setter вашего store) и `stream`. Внешний адаптер сохраняет исходный assistant.content с A2UI-блоками через onMessagesChange, а на экран передаёт только onText. Для `stream: true` транспорт вызывает onTextDelta и onDone; для `stream: false` — onResponse с полным assistant.content. Эти режимы не смешиваются. `accepted` означает, что сообщение принято вашим транспортом; ошибку до принятия сообщайте через rejected Promise или onError. Отмена и ошибки завершают декодер и игнорируют поздние callbacks.
 
 ## Передача каталога локальному агенту
 
@@ -104,7 +106,7 @@ const systemPrompt = [
 npm run export:agent
 ```
 
-Перенесите **весь `dist/agent`** в контур. Основные файлы: catalogSchema.json, protocolSchema.json, capabilities.json, instructions.txt, examples.json. Рядом скопированы оригинальные JSON-схемы из установленного SDK, включая common_types.json, для локального разрешения $ref. Backend читает эти файлы как данные; npm и React ему не нужны. URI catalogId идентифицирует каталог, но не требует запроса в интернет. Конфигурацию обновляйте вместе с версией фронта.
+Перенесите **весь `dist/agent`** в контур. Основные файлы: catalogSchema.json, protocolSchema.json, capabilities.json, instructions.txt, examples.json. Рядом скопированы оригинальные JSON-схемы из установленного SDK, включая common_types.json, для локального разрешения $ref. Backend читает эти файлы как данные; npm и React ему не нужны. URI catalogId идентифицирует каталог, но не требует запроса в интернет. Конфигурацию обновляйте вместе с версией фронта. capabilities содержит поддерживаемый catalogId; полная схема передаётся отдельно в catalogSchema.json, без дублирования inline-каталога. getAgentConfiguration возвращает независимые копии схем.
 
 ## Ответ агента
 

@@ -38,7 +38,8 @@ export class A2uiController {
         this.updateBindings(surface, properties, { disabled: true, error: '' });
       }
       const isCurrent = () => !this.disposed && this.processor.getSurface(surface.id) === surface &&
-        surface.componentsModel.get(component.id) === component && component.properties.questionId === properties.questionId;
+        surface.componentsModel.get(component.id) === component && component.properties.questionId === properties.questionId &&
+        ['selected', 'disabled', 'answered', 'error'].every(field => component.properties[field]?.path === properties[field]?.path);
       try {
         // SDK сериализует/валидирует стандартный формат обратного сообщения.
         const message = A2uiClientMessageSchema.parse({ version: 'v0.9', action }) as A2uiActionMessage;

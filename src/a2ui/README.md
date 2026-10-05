@@ -70,7 +70,7 @@ const response = a2ui.beginResponse({
 
 - `catalogSchema` из `a2uiCatalog.catalogSchema`;
 - `protocolSchema` из `Schemas.A2uiMessageSchemaRaw` SDK;
-- `capabilities` из `MessageProcessor.getRendererCapabilities`, включая supportedCatalogIds;
+- `capabilities` из `MessageProcessor.getRendererCapabilities`, включая supportedCatalogIds (схема передаётся отдельно, без inline-дублирования);
 - `instructions` с правилами каталога и текстового обрамления;
 - `examples` — стандартные сообщения для обеих карточек.
 

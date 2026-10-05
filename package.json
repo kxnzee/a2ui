@@ -23,7 +23,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/stream.test.ts tests/controller.test.ts tests/ui.test.tsx",
+    "test": "node --import tsx --test tests/stream.test.ts tests/controller.test.ts tests/ui.test.tsx tests/request.test.ts",
     "build:demo": "vite build",
     "build:lib": "vite build --config vite.library.config.ts && tsc -p tsconfig.library.json",
     "build": "npm run build:demo && npm run build:lib && npm run export:agent",
