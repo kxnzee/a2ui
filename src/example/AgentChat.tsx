@@ -18,7 +18,12 @@ export function AgentChat({ send, messages, onMessagesChange, stream = true }: {
     const request = sendChatRequest({
       send, messages, stream, input, beginResponse: a2ui.beginResponse,
       onText: delta => setText(t => t + delta),
-      onError: e => setError(e.message), onMessagesChange,
+      onError: e => {
+        setError(e.message);
+        // Карточка заблокирована после клика: разрешаем повторить выбор.
+        if (typeof input !== 'string') a2ui.reopen(input.action.surfaceId);
+      },
+      onMessagesChange,
     });
     cancelRequest.current = request.cancel;
     // Ошибка уже показана через onError. SDK не должен повторно её логировать,

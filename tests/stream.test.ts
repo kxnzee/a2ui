@@ -113,3 +113,30 @@ test('closing tag inside a JSON string does not end the block', () => {
     assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, [tricky]); assert.equal(errors.length, 0);
   }
 });
+
+test('unterminated string in a corrupt block does not swallow later text and blocks', () => {
+  const source = `До<a2ui>{"value":"bad</a2ui>После${frame(metrics)}`;
+  for (const split of [0, 15, 30, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(source.slice(0, split)); s.push(source.slice(split)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+  // Последний блок битый, после него только текст: восстанавливаем при finish.
+  const texts: string[] = []; const errors: Error[] = [];
+  const s = createA2uiStream({ onText: t => texts.push(t), onMessage() {}, onError: e => errors.push(e) });
+  s.push('<a2ui>{"value":"bad</a2ui>После'); s.finish();
+  assert.equal(texts.join(''), 'После'); assert.equal(errors.length, 1);
+});
+
+test('skipping an oversized block respects JSON strings and chunk boundaries', () => {
+  const big = `{"v":"${'x'.repeat(33000)}</a2ui> \\" </a2ui> y"}`;
+  const source = `До<a2ui>${big}</a2ui>После${frame(metrics)}`;
+  for (const size of [1, 7, 1000, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    for (let i = 0; i < source.length; i += size) s.push(source.slice(i, i + size));
+    s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+});

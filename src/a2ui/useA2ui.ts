@@ -75,6 +75,19 @@ export function useA2ui({ onAction, onActionError = defaultActionError }: {
     }
   }, [processor]);
 
+  // Разрешает повторный выбор в карточках поверхности: сбрасывает привязанный
+  // selected стандартным updateDataModel (например, после ошибки отправки).
+  const reopen = useCallback((surfaceId: string) => {
+    const surface = processor.model.getSurface(surfaceId);
+    if (!surface) return;
+    for (const [, component] of surface.componentsModel.entries) {
+      const path = component.type === 'ClarificationCard' ? component.properties.selected?.path : undefined;
+      if (typeof path === 'string') {
+        processor.processMessages([{ version: 'v0.9', updateDataModel: { surfaceId, path, value: '' } }]);
+      }
+    }
+  }, [processor]);
+
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -86,5 +99,5 @@ export function useA2ui({ onAction, onActionError = defaultActionError }: {
     };
   }, [processor]);
 
-  return useMemo(() => ({ processor, beginResponse, clear }), [processor, beginResponse, clear]);
+  return useMemo(() => ({ processor, beginResponse, clear, reopen }), [processor, beginResponse, clear, reopen]);
 }

@@ -188,3 +188,37 @@ test('MetricCard formats grouped and fractional numbers without rounding', () =>
   assert.match(view.container.textContent!, /0,125/);
   cleanup(); processor.model.dispose();
 });
+
+test('tiny metric values are not displayed as zero', () => {
+  const processor = createA2uiProcessor(() => {});
+  processor.processMessages([metricMessages()[0], { version: 'v0.9', updateComponents: { surfaceId: 'result', components: [
+    { id: 'root', component: 'MetricCard', title: 'Малое', value: 1e-21 },
+  ] } }]);
+  const view = render(<A2uiView processor={processor} />);
+  assert.doesNotMatch(view.container.textContent!, /Малое\s*0(?![,.\d])/);
+  assert.match(view.container.textContent!, /0,0{20}1/);
+  cleanup(); processor.model.dispose();
+});
+
+test('reopen lets the user retry after a send error in AgentChat', async () => {
+  const content = `Уточнение:${frame(questionMessages())}`;
+  let calls = 0;
+  const send: Send = (_body, callbacks) => {
+    calls++;
+    if (calls === 1) { callbacks.onTextDelta(content); callbacks.onDone(); return { accepted: Promise.resolve(), cancel() {} }; }
+    return { accepted: Promise.reject(new Error('Сеть недоступна')), cancel() {} };
+  };
+  function Chat() {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    return <AgentChat send={send} messages={messages} onMessagesChange={setMessages} />;
+  }
+  const view = render(<Chat />);
+  fireEvent.click(view.getByRole('button', { name: 'Запросить график' }));
+  fireEvent.click(view.getByRole('button', { name: 'Количество заказов' }));
+  await waitFor(() => view.getByRole('alert'));
+  await waitFor(() => assert.equal((view.getByRole('button', { name: 'Количество заказов' }) as HTMLButtonElement).disabled, false));
+  fireEvent.click(view.getByRole('button', { name: 'Количество заказов' }));
+  await waitFor(() => assert.equal(calls, 3));
+  cleanup();
+  await act(async () => {});
+});

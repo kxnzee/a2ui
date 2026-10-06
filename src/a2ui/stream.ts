@@ -5,8 +5,7 @@ const CLOSE = '</a2ui>';
 const MAX_BLOCK_LENGTH = 32_768;
 
 // Ищет закрывающий тег вне строковых литералов JSON, чтобы `</a2ui>` внутри
-// значения (например, в тексте вопроса) не обрывал блок. Кавычка без пары в
-// битом JSON сдвинет поиск до лимита размера, после чего блок отбрасывается.
+// значения (например, в тексте вопроса) не обрывал блок.
 function findClose(text: string) {
   let inString = false;
   for (let i = 0; i < text.length; i++) {
@@ -32,11 +31,36 @@ export function createA2uiStream(options: StreamOptions) {
   let inside = false;
   let ended = false;
   let skipping = false; // слишком большой блок: пропускаем до закрывающего тега
+  // Состояние строк JSON при пропуске: блок приходит чанками, а тег внутри
+  // значения не должен считаться его концом.
+  let skipString = false;
+  let skipEscaped = false;
 
   const emitText = (text: string) => { if (text) options.onText(text); };
   const reportError = (error: Error) => {
     if (options.onError) options.onError(error);
     else throw error;
+  };
+
+  // Продолжает пропуск блока по buffer; true — найден закрывающий тег вне строк.
+  const skip = () => {
+    for (let i = 0; i < buffer.length; i++) {
+      const char = buffer[i];
+      if (skipEscaped) skipEscaped = false;
+      else if (skipString) {
+        if (char === '\\') skipEscaped = true;
+        else if (char === '"') skipString = false;
+      } else if (char === '"') skipString = true;
+      else if (char === '<' && buffer.startsWith(CLOSE, i)) {
+        buffer = buffer.slice(i + CLOSE.length);
+        return true;
+      } else if (char === '<' && CLOSE.startsWith(buffer.slice(i))) {
+        buffer = buffer.slice(i); // возможное начало закрывающего тега в следующем чанке
+        return false;
+      }
+    }
+    buffer = '';
+    return false;
   };
 
   return {
@@ -62,19 +86,24 @@ export function createA2uiStream(options: StreamOptions) {
           break;
         }
 
-        // При пропуске блока JSON уже невалиден, поэтому ищем тег без учёта строк.
-        const end = skipping ? buffer.indexOf(CLOSE) : findClose(buffer);
         if (skipping) {
-          if (end < 0) { buffer = buffer.slice(-(CLOSE.length - 1)); break; }
-          buffer = buffer.slice(end + CLOSE.length);
+          if (!skip()) break;
           inside = skipping = false;
           continue;
+        }
+        let end = findClose(buffer);
+        // Кавычка без пары в битом JSON скрывает закрывающий тег. Если дальше уже
+        // есть следующий блок, считаем границей первый тег: блок будет отклонён
+        // как некорректный, а текст и последующие блоки сохранятся.
+        if (end < 0) {
+          const plain = buffer.indexOf(CLOSE);
+          if (plain >= 0 && buffer.indexOf(OPEN, plain) >= 0) end = plain;
         }
         if ((end < 0 && buffer.length > MAX_BLOCK_LENGTH + CLOSE.length) ||
             end > MAX_BLOCK_LENGTH) {
           // Отбрасываем блок целиком, текст после него сохраняется.
           skipping = true;
-          buffer = end < 0 ? buffer.slice(-(CLOSE.length - 1)) : buffer;
+          skipString = skipEscaped = false;
           reportError(new Error('UI-блок слишком большой'));
           continue;
         }
@@ -105,8 +134,15 @@ export function createA2uiStream(options: StreamOptions) {
       ended = true;
       const tail = buffer;
       buffer = '';
-      if (inside) { if (!skipping) reportError(new Error('Стрим закончился до закрытия UI-блока')); }
-      else emitText(tail);
+      if (!inside) emitText(tail);
+      else if (!skipping) {
+        // Закрывающий тег мог остаться скрытым за кавычкой без пары: сохраняем текст после него.
+        const plain = tail.indexOf(CLOSE);
+        if (plain >= 0) {
+          reportError(new Error('Некорректный UI-блок: проверьте JSON и схему'));
+          emitText(tail.slice(plain + CLOSE.length));
+        } else reportError(new Error('Стрим закончился до закрытия UI-блока'));
+      }
     },
 
     cancel() {

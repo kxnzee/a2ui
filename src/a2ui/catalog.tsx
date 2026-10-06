@@ -79,9 +79,10 @@ export const MetricApi = {
   }).strict().describe('Одно известное числовое значение с названием и необязательной единицей. Не выдумывай значение; если данных нет, запроси их. Не имеет события выбора.'),
 };
 
-// Локаль берётся из lang страницы (по умолчанию ru-RU); дроби не округляются.
+// Локаль берётся из lang страницы (по умолчанию ru-RU). Значащие цифры, а не знаки
+// после запятой: малые значения вроде 1e-21 не должны превращаться в 0.
 const formatNumber = (value: number) => new Intl.NumberFormat(
-  document.documentElement.lang || 'ru-RU', { maximumFractionDigits: 20 },
+  document.documentElement.lang || 'ru-RU', { maximumSignificantDigits: 21 },
 ).format(value);
 
 const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
