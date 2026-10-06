@@ -1,4 +1,4 @@
-import { MessageProcessor, STRICT_VALIDATION, type A2uiClientMessage } from '@a2ui/web_core/v0_9';
+import { MessageProcessor, type A2uiClientMessage } from '@a2ui/web_core/v0_9';
 import type { ReactComponentImplementation } from '@a2ui/react/v0_9';
 import { a2uiCatalog } from './catalog.js';
 
@@ -9,6 +9,6 @@ export type A2uiProcessor = MessageProcessor<ReactComponentImplementation>;
 // Возвращаем сам SDK, без собственного контроллера, store и логики карточек.
 export function createA2uiProcessor(onAction: ActionHandler): A2uiProcessor {
   return new MessageProcessor([a2uiCatalog], action => onAction({ version: 'v0.9', action }), {
-    version: 'v0.9', validationConfig: { ...STRICT_VALIDATION, targetVersion: 'v0.9' },
+    version: 'v0.9',
   });
 }

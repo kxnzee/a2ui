@@ -26,29 +26,43 @@ export function sendChatRequest(options: {
   let cancelTransport: (() => void) | undefined;
   let resolve!: () => void; let reject!: (error: Error) => void;
   const accepted = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+  const asError = (error: unknown) => error instanceof Error ? error : new Error('Не удалось отправить запрос', { cause: error });
+  const cancelResponse = () => {
+    try { response.cancel(); }
+    finally { cancelTransport?.(); }
+  };
   const fail = (error: Error) => {
     if (status !== 'active') return;
-    status = 'failed'; response.cancel(); reject(error);
-    cancelTransport?.(); options.onError(error);
+    status = 'failed'; reject(error);
+    try { cancelResponse(); }
+    finally { options.onError(error); }
+  };
+  const receive = (callback: () => void) => {
+    if (status !== 'active') return;
+    try { callback(); }
+    catch (error) { fail(asError(error)); }
   };
   const finish = () => {
+    response.finish();
     if (status !== 'active') return;
-    status = 'done'; response.finish();
     // В истории сохраняется весь ответ с A2UI, видимый текст идёт отдельно.
     options.onMessagesChange([...messages, { role: 'assistant', content: raw }]);
+    if (status !== 'active') return;
+    status = 'done';
     resolve(); // Полный ответ также подтверждает принятие запроса.
   };
   try {
     options.onMessagesChange(messages);
     const request = options.send({ messages, stream: options.stream }, {
       onTextDelta(delta) {
-        if (status !== 'active' || !options.stream) return;
-        raw += delta; response.push(delta);
+        if (options.stream) receive(() => { raw += delta; response.push(delta); });
       },
-      onDone() { if (options.stream) finish(); },
+      onDone() { if (options.stream) receive(finish); },
       onResponse(content) {
-        if (status !== 'active' || options.stream) return;
-        raw = content; response.push(content); finish();
+        if (!options.stream) receive(() => {
+          raw = content; response.push(content);
+          if (status === 'active') finish();
+        });
       },
       onError: fail,
     });
@@ -56,18 +70,18 @@ export function sendChatRequest(options: {
     if (status !== 'active' && status !== 'done') cancelTransport();
     // Callback onError и rejected accepted имеют одинаковое поведение.
     void request.accepted.then(() => { if (status === 'active') resolve(); }, error => {
-      fail(error instanceof Error ? error : new Error('Не удалось отправить запрос'));
+      fail(asError(error));
     });
   } catch (error) {
-    fail(error instanceof Error ? error : new Error('Не удалось отправить запрос'));
+    fail(asError(error));
   }
   return {
     accepted,
     cancel() {
       if (status !== 'active') return;
-      status = 'cancelled'; response.cancel();
+      status = 'cancelled';
       const error = new Error('Запрос отменён'); error.name = 'AbortError'; reject(error);
-      cancelTransport?.();
+      cancelResponse();
     },
   };
 }

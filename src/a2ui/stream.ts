@@ -18,8 +18,9 @@ export function createA2uiStream(options: StreamOptions) {
   let failed = false;
 
   const emitText = (text: string) => { if (text) options.onText(text); };
-  const fail = (message: string) => {
-    options.onError?.(new Error(message));
+  const reportError = (error: Error) => {
+    if (options.onError) options.onError(error);
+    else throw error;
   };
 
   return {
@@ -27,20 +28,22 @@ export function createA2uiStream(options: StreamOptions) {
       if (ended) throw new Error('Стрим уже завершён');
       if (failed) return;
       buffer += delta;
-      while (buffer) {
+      while (!ended && !failed && buffer) {
         if (!inside) {
           const start = buffer.indexOf(OPEN);
           if (start >= 0) {
-            emitText(buffer.slice(0, start));
+            const text = buffer.slice(0, start);
             buffer = buffer.slice(start + OPEN.length);
             inside = true;
+            emitText(text);
             continue;
           }
           // Сохраняем только возможный незавершённый открывающий тег.
           let keep = Math.min(buffer.length, OPEN.length - 1);
           while (keep > 0 && !OPEN.startsWith(buffer.slice(-keep))) keep--;
-          emitText(buffer.slice(0, buffer.length - keep));
+          const text = buffer.slice(0, buffer.length - keep);
           buffer = keep ? buffer.slice(-keep) : '';
+          emitText(text);
           break;
         }
 
@@ -49,7 +52,7 @@ export function createA2uiStream(options: StreamOptions) {
             end > MAX_BLOCK_LENGTH) {
           failed = true;
           buffer = '';
-          fail('UI-блок слишком большой');
+          reportError(new Error('UI-блок слишком большой'));
           break;
         }
         if (end < 0) break;
@@ -57,11 +60,17 @@ export function createA2uiStream(options: StreamOptions) {
         const json = buffer.slice(0, end);
         buffer = buffer.slice(end + CLOSE.length);
         inside = false;
+        let message: A2uiMessage;
         try {
-          const message = A2uiMessageSchema.parse(JSON.parse(json));
+          message = A2uiMessageSchema.parse(JSON.parse(json));
+        } catch (cause) {
+          reportError(new Error('Некорректный UI-блок: проверьте JSON и схему', { cause }));
+          continue;
+        }
+        try {
           options.onMessage(message);
-        } catch {
-          fail('Некорректный UI-блок: проверьте JSON и схему');
+        } catch (cause) {
+          reportError(new Error('Не удалось обработать сообщение A2UI', { cause }));
         }
       }
     },
@@ -70,9 +79,10 @@ export function createA2uiStream(options: StreamOptions) {
       if (ended) return;
       ended = true;
       if (failed) return;
-      if (inside) fail('Стрим закончился до закрытия UI-блока');
-      else emitText(buffer);
+      const tail = buffer;
       buffer = '';
+      if (inside) reportError(new Error('Стрим закончился до закрытия UI-блока'));
+      else emitText(tail);
     },
 
     cancel() {

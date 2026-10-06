@@ -21,17 +21,15 @@ export function AgentChat({ send, messages, onMessagesChange, stream = true }: {
       onError: e => setError(e.message), onMessagesChange,
     });
     cancelRequest.current = request.cancel;
-    return request.accepted;
+    // Ошибка уже показана через onError. SDK не должен повторно её логировать,
+    // а поздний catch старого запроса — перезаписывать состояние нового.
+    return request.accepted.catch(() => {});
   };
   useEffect(() => () => cancelRequest.current?.(), []);
 
-  async function start() {
+  function start() {
     a2ui.clear();
-    try { await requestRef.current('Покажи график с цифрами'); }
-    catch (e) {
-      // Отмена старого запроса не должна менять ошибку нового запроса.
-      if (!(e instanceof Error && e.name === 'AbortError')) setError('Не удалось отправить запрос');
-    }
+    void requestRef.current('Покажи график с цифрами');
   }
   return <>
     <button onClick={start}>Запросить график</button>
