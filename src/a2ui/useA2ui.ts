@@ -9,6 +9,9 @@ export type A2uiResponse = {
   cancel: () => void;
 };
 
+// Предел одновременных поверхностей: блок ограничен по размеру, но их число — нет.
+const MAX_SURFACES = 10;
+
 const asError = (cause: unknown) => cause instanceof Error ? cause : new Error('Ошибка обработчика действия A2UI', { cause });
 const defaultActionError = (error: Error) => console.error(error);
 
@@ -40,7 +43,12 @@ export function useA2ui({ onAction, onActionError = defaultActionError }: {
     let ended = false;
     const decoder = createA2uiStream({
       ...options,
-      onMessage: message => processor.processMessages([message]),
+      onMessage: message => {
+        if ('createSurface' in message && processor.model.surfacesMap.size >= MAX_SURFACES) {
+          throw new Error(`Слишком много поверхностей A2UI (максимум ${MAX_SURFACES})`);
+        }
+        processor.processMessages([message]);
+      },
     });
     const response: A2uiResponse = {
       push(delta) { if (!ended) decoder.push(delta); },

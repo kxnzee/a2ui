@@ -164,3 +164,14 @@ test('processor survives hide/show of the owning component', async () => {
   assert.equal(processor.model.surfacesMap.size, 2);
   cleanup();
 });
+
+test('surface count is capped; the excess createSurface is reported, not rendered', async () => {
+  const hook = renderHook(() => useA2ui({ onAction() {} }));
+  const errors: Error[] = [];
+  const response = hook.result.current.beginResponse({ onText() {}, onError: e => errors.push(e) });
+  const create = (n: number) => frame([{ version: 'v0.9', createSurface: { surfaceId: `s${n}`, catalogId: 'urn:kxnzee:a2ui:cards:v2' } }]);
+  act(() => { for (let n = 0; n < 12; n++) response.push(create(n)); response.finish(); });
+  assert.equal(hook.result.current.processor.model.surfacesMap.size, 10);
+  assert.equal(errors.length, 2);
+  cleanup();
+});
