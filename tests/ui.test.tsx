@@ -124,3 +124,43 @@ for (const stream of [true, false]) test(`example chat sends native card actions
   cleanup();
   await act(async () => {});
 });
+
+test('card with model-prefilled selected is not locked before the first click', async () => {
+  const answers: unknown[] = [];
+  const messages = questionMessages();
+  const update = messages[1];
+  if ('updateDataModel' in update) update.updateDataModel.value = { selected: 'revenue', disabled: false };
+  const processor = createA2uiProcessor(message => { answers.push(message); });
+  processor.processMessages(messages);
+  const view = render(<A2uiView processor={processor} />);
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, false);
+  fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
+  cleanup(); processor.model.dispose();
+});
+
+test('onAction failures go to onActionError instead of unhandled rejections', async () => {
+  const errors: Error[] = [];
+  for (const fail of [() => { throw new Error('sync'); }, async () => { throw new Error('async'); }]) {
+    const hook = renderHook(() => useA2ui({ onAction: fail, onActionError: e => errors.push(e) }));
+    hook.result.current.processor.processMessages(questionMessages());
+    const view = render(<A2uiView processor={hook.result.current.processor} />);
+    fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
+    await waitFor(() => assert.equal(errors.length, fail.constructor.name === 'AsyncFunction' ? 2 : 1));
+    cleanup();
+  }
+  assert.deepEqual(errors.map(e => e.message), ['sync', 'async']);
+});
+
+test('processor survives hide/show of the owning component', async () => {
+  const hook = renderHook(() => useA2ui({ onAction() {} }));
+  const { processor } = hook.result.current;
+  processor.processMessages(questionMessages());
+  hook.unmount();
+  const again = renderHook(() => useA2ui({ onAction() {} }));
+  assert.notEqual(again.result.current.processor, processor);
+  // Тот же processor остаётся рабочим после cleanup: dispose не вызывается.
+  processor.processMessages(metricMessages());
+  assert.equal(processor.model.surfacesMap.size, 2);
+  cleanup();
+});

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createA2uiProcessor, type ActionHandler } from './processor.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
@@ -9,17 +9,30 @@ export type A2uiResponse = {
   cancel: () => void;
 };
 
+const asError = (cause: unknown) => cause instanceof Error ? cause : new Error('Ошибка обработчика действия A2UI', { cause });
+const defaultActionError = (error: Error) => console.error(error);
+
 // Только A2UI: нет запроса, состояния чата, истории сообщений или транспорта.
-export function useA2ui({ onAction }: { onAction: ActionHandler }) {
+export function useA2ui({ onAction, onActionError = defaultActionError }: {
+  onAction: ActionHandler;
+  // Ошибка onAction (синхронная или отклонённый промис). Без него — console.error.
+  onActionError?: (error: Error) => void;
+}) {
   const actionRef = useRef(onAction);
-  useLayoutEffect(() => { actionRef.current = onAction; });
+  const actionErrorRef = useRef(onActionError);
+  useLayoutEffect(() => { actionRef.current = onAction; actionErrorRef.current = onActionError; });
   const mounted = useRef(true);
   const active = useRef<A2uiResponse | undefined>(undefined);
-  const processor = useMemo(
-    () => createA2uiProcessor(message => {
-      if (mounted.current) return actionRef.current(message);
-    }), [],
-  );
+  // useState, а не useMemo: React вправе выбросить мемоизированное значение,
+  // и тогда processor с поверхностями пересоздался бы посреди работы.
+  const [processor] = useState(() => createA2uiProcessor(message => {
+    if (!mounted.current) return;
+    // SDK не обрабатывает результат обработчика: отклонённый промис стал бы
+    // unhandledrejection, поэтому перехватываем его сами.
+    const report = (cause: unknown) => actionErrorRef.current(asError(cause));
+    try { return Promise.resolve(actionRef.current(message)).catch(report); }
+    catch (cause) { report(cause); }
+  }));
 
   const beginResponse = useCallback((options: A2uiResponseOptions): A2uiResponse => {
     if (!mounted.current) throw new Error('A2UI уже отключён');
@@ -59,9 +72,9 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
     return () => {
       mounted.current = false;
       active.current?.cancel();
-      // StrictMode повторяет setup/cleanup эффекта. Закрываем processor
-      // только если за cleanup не последовал повторный setup.
-      queueMicrotask(() => { if (!mounted.current) processor.model.dispose(); });
+      // processor намеренно не dispose: cleanup вызывают и StrictMode, и повторный
+      // показ поддерева (например, Activity), а после dispose processor неработоспособен.
+      // Отписываться нечего: processor никем не удерживается и будет собран GC.
     };
   }, [processor]);
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button, Card, Statistic, Space } from 'antd';
 import { z } from 'zod-a2ui';
 import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
@@ -37,7 +38,14 @@ export const ClarificationApi = {
   }).strict().describe('Уточнение с 2–6 вариантами. selected привяжи к data model. При выборе вызывается onSelect; context действия может ссылаться на selected.'),
 };
 
-const ClarificationCard = createComponentImplementation(ClarificationApi, ({ props }) => (
+const ClarificationCard = createComponentImplementation(ClarificationApi, ({ props }) => {
+  // Блокировка от повторной отправки хранится локально, а не выводится из selected:
+  // модель может сама проставить selected по умолчанию, и тогда карточка была бы
+  // заблокирована до первого клика. Блокировка снимается, когда приложение
+  // сбрасывает selected (updateDataModel) — например, чтобы повторить после ошибки.
+  const [sent, setSent] = useState<string>();
+  const locked = sent !== undefined && props.selected === sent;
+  return (
   <Card title={<span style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{props.question}</span>}>
     <Space direction="vertical" style={{ width: '100%' }}>
       <Space wrap>
@@ -45,9 +53,10 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
           <Button
             key={option.id}
             type={props.selected === option.id ? 'primary' : 'default'}
-            disabled={props.disabled || !!props.selected}
+            disabled={props.disabled || locked}
             style={{ height: 'auto', whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: '100%' }}
             onClick={() => {
+              setSent(option.id);
               props.setSelected(option.id);
               props.onSelect();
             }}
@@ -58,7 +67,8 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
       </Space>
     </Space>
   </Card>
-));
+  );
+});
 
 export const MetricApi = {
   name: 'MetricCard',
@@ -79,7 +89,7 @@ const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
 export const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
 ID вариантов должны быть уникальны. selected привяжи к абсолютному пути data model и инициализируй пустой строкой.
 onSelect — event с name="clarification_answer" и context: optionId (binding к selected). Вопрос определяют surfaceId и sourceComponentId из действия.
-После выбора карточка блокируется сама (selected непустой). Чтобы разрешить повторный выбор, приложение сбрасывает selected через updateDataModel. Необязательный disabled (например, binding к /disabled) блокирует варианты принудительно. Статус отправки и ошибки обрабатывает приложение, не A2UI.
+После клика карточка блокируется сама. Чтобы разрешить повторный выбор, приложение меняет selected через updateDataModel (например, на пустую строку). Необязательный disabled (например, binding к /disabled) блокирует варианты принудительно. Статус отправки и ошибки обрабатывает приложение, не A2UI.
 Действие клиента приходит как стандартное сообщение {version:"v0.9",action:{name,surfaceId,sourceComponentId,timestamp,context}}. После выбора продолжи задачу.
 Корневой компонент имеет id="root". Можно обновлять существующие поверхности; удаляй завершённую карточку через deleteSurface, если она больше не нужна.`;
 
