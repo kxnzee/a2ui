@@ -4,6 +4,22 @@ const OPEN = '<a2ui>';
 const CLOSE = '</a2ui>';
 const MAX_BLOCK_LENGTH = 32_768;
 
+// Ищет закрывающий тег вне строковых литералов JSON, чтобы `</a2ui>` внутри
+// значения (например, в тексте вопроса) не обрывал блок. Кавычка без пары в
+// битом JSON сдвинет поиск до лимита размера, после чего блок отбрасывается.
+function findClose(text: string) {
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (char === '\\') i++;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === '<' && text.startsWith(CLOSE, i)) return i;
+  }
+  return -1;
+}
+
 export type StreamOptions = {
   onText: (delta: string) => void;
   onMessage: (message: A2uiMessage) => void;
@@ -46,7 +62,8 @@ export function createA2uiStream(options: StreamOptions) {
           break;
         }
 
-        const end = buffer.indexOf(CLOSE);
+        // При пропуске блока JSON уже невалиден, поэтому ищем тег без учёта строк.
+        const end = skipping ? buffer.indexOf(CLOSE) : findClose(buffer);
         if (skipping) {
           if (end < 0) { buffer = buffer.slice(-(CLOSE.length - 1)); break; }
           buffer = buffer.slice(end + CLOSE.length);

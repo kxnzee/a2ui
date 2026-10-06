@@ -101,3 +101,15 @@ test('markdown code fence around block JSON is tolerated', () => {
     assert.deepEqual(messages, [metrics[0]]); assert.equal(errors.length, 0);
   }
 });
+
+test('closing tag inside a JSON string does not end the block', () => {
+  const tricky = structuredClone(metrics[1]) as Record<string, any>;
+  tricky.updateComponents.components[0].title = 'a </a2ui> "b\\" </a2ui> c';
+  const source = `До${frame([tricky as never])}После`;
+  for (let split = 0; split <= source.length; split++) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(source.slice(0, split)); s.push(source.slice(split)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, [tricky]); assert.equal(errors.length, 0);
+  }
+});
