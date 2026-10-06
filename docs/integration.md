@@ -180,7 +180,6 @@ catalog.json генерируется из того же inline-каталога
             "event": {
               "name": "clarification_answer",
               "context": {
-                "questionId": "metric-1",
                 "optionId": {
                   "path": "/selected"
                 }
@@ -195,7 +194,7 @@ catalog.json генерируется из того же inline-каталога
 ```
 <!-- /clarification-example -->
 
-Это массив стандартных сообщений A2UI. Для прямого JSON-ответа передайте его в processor.processMessages. Для смешанного текста обрамляйте **каждый объект отдельно** в `<a2ui>…</a2ui>`. questionId передаётся в context события; у карточки есть question, options, selected, onSelect и необязательный disabled.
+Это массив стандартных сообщений A2UI. Для прямого JSON-ответа передайте его в processor.processMessages. Для смешанного текста обрамляйте **каждый объект отдельно** в `<a2ui>…</a2ui>`. В context события передаётся optionId, вопрос определяют surfaceId и sourceComponentId действия; у карточки есть question, options, selected, onSelect и необязательный disabled.
 
 Полные примеры находятся в src/demo/messages.ts. Скрипт export:agent сохраняет examples.json отдельно; backend может добавить его к prompt. Модуль getAgentConfiguration возвращает схемы и инструкции без примеров.
 
@@ -207,7 +206,7 @@ onError получает ошибки JSON/конверта и ошибки об
 
 ## Нажатие пользователя
 
-`onAction` получает стандартное клиентское сообщение `{version: 'v0.9', action: {name, surfaceId, sourceComponentId, timestamp, context}}`. В нашем примере name — clarification_answer, context содержит questionId и optionId. Отправляйте полный объект либо JSON-строку в тот же диалог. Следующий ответ агента обрабатывается новым response. Если нужно блокировать варианты, приложение обновляет disabled через стандартный updateDataModel и снимает блокировку при ошибке. Например, для binding disabled: {path: "/disabled"} приложение передаёт `{version: "v0.9", updateDataModel: {surfaceId: "question", path: "/disabled", value: true}}` перед отправкой и false при ошибке. Пример расположен в src/demo/main.tsx; модуль не управляет отправкой. Серверную идемпотентность обеспечивает ваше приложение.
+`onAction` получает стандартное клиентское сообщение `{version: 'v0.9', action: {name, surfaceId, sourceComponentId, timestamp, context}}`. В нашем примере name — clarification_answer, context содержит optionId. Отправляйте полный объект либо JSON-строку в тот же диалог. Следующий ответ агента обрабатывается новым response. Если нужно блокировать варианты, приложение обновляет disabled через стандартный updateDataModel и снимает блокировку при ошибке. Например, для binding disabled: {path: "/disabled"} приложение передаёт `{version: "v0.9", updateDataModel: {surfaceId: "question", path: "/disabled", value: true}}` перед отправкой и false при ошибке. Пример расположен в src/demo/main.tsx; модуль не управляет отправкой. Серверную идемпотентность обеспечивает ваше приложение.
 
 ## Добавление компонентов
 

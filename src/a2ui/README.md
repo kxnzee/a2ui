@@ -42,13 +42,13 @@ function beginAgentReply() {
 
 Если транспорт отдаёт JSON A2UI отдельно, передавайте его прямо в SDK: `a2ui.processor.processMessages(messages)`. Декодер тогда не нужен. В web_core 0.11 processMessages принимает массив сообщений протокола: для одного объекта передайте [message]; массив истории чата `{role, content}` ему не передаётся.
 
-Хук не отправляет запрос, не хранит историю и не управляет статусом отправки. onAction получает стандартное `{version, action}` с context, разрешённым SDK. Ошибки запроса, loading, повтор и серверную идемпотентность обрабатывает ваш чат. Для блокировки вариантов приложение может обновить необязательный disabled через updateDataModel; пример есть в src/demo/main.tsx. Компонент не меняет disabled самостоятельно.
+Хук не отправляет запрос, не хранит историю и не управляет статусом отправки. onAction получает стандартное `{version, action}` с context, разрешённым SDK. Ошибки запроса, loading, повтор и серверную идемпотентность обрабатывает ваш чат. Для блокировки вариантов приложение может обновить необязательный disabled через updateDataModel; пример есть в src/demo/main.tsx. Карточка сама блокируется, когда selected непустой; чтобы разрешить повторный выбор (например, после ошибки отправки), сбросьте selected через updateDataModel (см. src/demo/main.tsx). Необязательный disabled блокирует варианты принудительно. В историю чата попадает ответ целиком, включая блоки `<a2ui>`, а действие карточки уходит как user-сообщение с JSON.
 
 beginResponse отменяет предыдущий декодер; поздние дельты игнорируются. clear отменяет декодер и удаляет поверхности стандартными deleteSurface, но не отменяет HTTP. При unmount processor освобождается; cleanup совместим с React StrictMode. Для смены диалога используйте компонент с key={conversationId}.
 
 ## Компоненты и агент
 
-ClarificationCard: question, options, selected, onSelect, необязательный disabled. selected — writable binding к абсолютному пути data model. При клике React вызывает setSelected(option.id), затем onSelect(). SDK подставляет выбор в context действия. questionId находится в context события, отдельного дублирующего свойства карточки нет. MetricCard: title, числовой value, необязательный unit.
+ClarificationCard: question, options, selected, onSelect, необязательный disabled. selected — writable binding к абсолютному пути data model. При клике React вызывает setSelected(option.id), затем onSelect(). SDK подставляет выбор в context действия. Вопрос определяют surfaceId и sourceComponentId стандартного action; в context передаётся только optionId. MetricCard: title, числовой value, необязательный unit.
 
 getAgentConfiguration возвращает catalogSchema, protocolSchema, capabilities и instructions. Передайте их существующей интеграции модели. Реестр React сам не меняет prompt. Добавляя компонент, определите Zod-схему с description, реализацию createComponentImplementation и включите её в Catalog. Затем повторите export:agent.
 

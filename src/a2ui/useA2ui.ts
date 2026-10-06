@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createA2uiProcessor, type ActionHandler } from './processor.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
@@ -12,7 +12,7 @@ export type A2uiResponse = {
 // Только A2UI: нет запроса, состояния чата, истории сообщений или транспорта.
 export function useA2ui({ onAction }: { onAction: ActionHandler }) {
   const actionRef = useRef(onAction);
-  actionRef.current = onAction;
+  useLayoutEffect(() => { actionRef.current = onAction; });
   const mounted = useRef(true);
   const active = useRef<A2uiResponse | undefined>(undefined);
   const processor = useMemo(

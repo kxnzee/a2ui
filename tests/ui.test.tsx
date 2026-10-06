@@ -24,13 +24,20 @@ test('AntD choices and bindings work in StrictMode; host controls disabled state
   const view = render(<StrictMode><A2uiView processor={processor} /></StrictMode>);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
   await waitFor(() => assert.equal(answers.length, 1));
+  // После выбора карточка блокируется сама, повторный клик не шлёт второй action.
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
+  fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
+  assert.equal(answers.length, 1);
+  // Приложение разрешает повторный выбор, сбросив selected стандартным сообщением.
+  act(() => processor.processMessages([{ version: 'v0.9', updateDataModel: {
+    surfaceId: 'question', path: '/selected', value: '',
+  } }]));
   assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, false);
-  assert.equal(view.queryByText('Вы выбрали: Выручка'), null);
   act(() => processor.processMessages([{ version: 'v0.9', updateDataModel: {
     surfaceId: 'question', path: '/disabled', value: true,
   } }]));
   assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
-  act(() => { processor.processMessages([removeQuestion]); processor.processMessages(questionMessages('next')); });
+  act(() => { processor.processMessages([removeQuestion]); processor.processMessages(questionMessages()); });
   assert.equal((view.getByRole('button', { name: 'Количество заказов' }) as HTMLButtonElement).disabled, false);
   cleanup(); processor.model.dispose();
 });
@@ -113,7 +120,7 @@ for (const stream of [true, false]) test(`example chat sends native card actions
   assert.equal(bodies[1].messages[1].content, content);
   const action = JSON.parse(bodies[1].messages[2].content);
   assert.equal(action.version, 'v0.9');
-  assert.deepEqual(action.action.context, { questionId: 'metric-1', optionId: 'orders' });
+  assert.deepEqual(action.action.context, { optionId: 'orders' });
   cleanup();
   await act(async () => {});
 });

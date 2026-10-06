@@ -48,6 +48,12 @@ function Demo() {
       if (current === generation.current) {
         setError(error instanceof Error ? error.message : 'Ошибка отправки');
         setDisabled(false);
+        // Карточка заблокирована выбором; сброс selected разрешает повтор.
+        if (a2ui.processor.model.getSurface(message.action.surfaceId) === surface) {
+          a2ui.processor.processMessages([{ version: 'v0.9', updateDataModel: {
+            surfaceId: message.action.surfaceId, path: '/selected', value: '',
+          } }]);
+        }
       }
     } finally {
       if (current === generation.current) sending.current = false;

@@ -82,3 +82,13 @@ test('a throwing error callback is invoked once and valid frames still follow re
   recovery.push(`<a2ui>{</a2ui>${frame(metrics)}`); recovery.finish();
   assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
 });
+
+test('oversized block is dropped, text and following blocks survive', () => {
+  for (const split of [10, 20000, 33000]) {
+    const source = `До<a2ui>${'x'.repeat(33000)}</a2ui>После${frame(metrics)}`;
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(source.slice(0, split)); s.push(source.slice(split)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+});

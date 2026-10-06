@@ -13,7 +13,7 @@ const examples: Record<'clarification' | 'metric', A2uiMessage[]> = {
       options: [{ id: 'revenue', label: 'Выручка' }, { id: 'orders', label: 'Количество заказов' }],
       selected: { path: '/selected' }, disabled: { path: '/disabled' },
       onSelect: { event: { name: 'clarification_answer', context: {
-        questionId: 'metric-1', optionId: { path: '/selected' },
+        optionId: { path: '/selected' },
       } } },
     }] } },
   ],

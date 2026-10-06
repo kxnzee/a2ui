@@ -24,7 +24,7 @@ test('native SDK resolves selected binding into a standard action without changi
   if ('action' in parsed) {
     assert.equal(parsed.action.sourceComponentId, 'root');
     assert.equal(parsed.action.surfaceId, 'question');
-    assert.deepEqual(parsed.action.context, { questionId: 'metric-1', optionId: 'orders' });
+    assert.deepEqual(parsed.action.context, { optionId: 'orders' });
   }
   assert.equal(props(processor).disabled.value, false);
   assert.equal(processor.model.getSurface('question')!.dataModel.get('/answered'), undefined);

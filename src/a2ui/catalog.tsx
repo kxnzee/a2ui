@@ -45,7 +45,7 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
           <Button
             key={option.id}
             type={props.selected === option.id ? 'primary' : 'default'}
-            disabled={props.disabled}
+            disabled={props.disabled || !!props.selected}
             style={{ height: 'auto', whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: '100%' }}
             onClick={() => {
               props.setSelected(option.id);
@@ -78,8 +78,8 @@ const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
 
 export const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
 ID вариантов должны быть уникальны. selected привяжи к абсолютному пути data model и инициализируй пустой строкой.
-onSelect — event с name="clarification_answer" и context: questionId (ID вопроса), optionId (binding к selected).
-Если чат должен блокировать варианты во время запроса, используй необязательный disabled, например binding к /disabled. Статус отправки и ошибки обрабатывает приложение, не A2UI.
+onSelect — event с name="clarification_answer" и context: optionId (binding к selected). Вопрос определяют surfaceId и sourceComponentId из действия.
+После выбора карточка блокируется сама (selected непустой). Чтобы разрешить повторный выбор, приложение сбрасывает selected через updateDataModel. Необязательный disabled (например, binding к /disabled) блокирует варианты принудительно. Статус отправки и ошибки обрабатывает приложение, не A2UI.
 Действие клиента приходит как стандартное сообщение {version:"v0.9",action:{name,surfaceId,sourceComponentId,timestamp,context}}. После выбора продолжи задачу.
 Корневой компонент имеет id="root". Можно обновлять существующие поверхности; удаляй завершённую карточку через deleteSurface, если она больше не нужна.`;
 

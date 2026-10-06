@@ -15,7 +15,7 @@ export function createA2uiStream(options: StreamOptions) {
   let buffer = '';
   let inside = false;
   let ended = false;
-  let failed = false;
+  let skipping = false; // слишком большой блок: пропускаем до закрывающего тега
 
   const emitText = (text: string) => { if (text) options.onText(text); };
   const reportError = (error: Error) => {
@@ -26,9 +26,8 @@ export function createA2uiStream(options: StreamOptions) {
   return {
     push(delta: string) {
       if (ended) throw new Error('Стрим уже завершён');
-      if (failed) return;
       buffer += delta;
-      while (!ended && !failed && buffer) {
+      while (!ended && buffer) {
         if (!inside) {
           const start = buffer.indexOf(OPEN);
           if (start >= 0) {
@@ -48,12 +47,19 @@ export function createA2uiStream(options: StreamOptions) {
         }
 
         const end = buffer.indexOf(CLOSE);
+        if (skipping) {
+          if (end < 0) { buffer = buffer.slice(-(CLOSE.length - 1)); break; }
+          buffer = buffer.slice(end + CLOSE.length);
+          inside = skipping = false;
+          continue;
+        }
         if ((end < 0 && buffer.length > MAX_BLOCK_LENGTH + CLOSE.length) ||
             end > MAX_BLOCK_LENGTH) {
-          failed = true;
-          buffer = '';
+          // Отбрасываем блок целиком, текст после него сохраняется.
+          skipping = true;
+          buffer = end < 0 ? buffer.slice(-(CLOSE.length - 1)) : buffer;
           reportError(new Error('UI-блок слишком большой'));
-          break;
+          continue;
         }
         if (end < 0) break;
 
@@ -78,10 +84,9 @@ export function createA2uiStream(options: StreamOptions) {
     finish() {
       if (ended) return;
       ended = true;
-      if (failed) return;
       const tail = buffer;
       buffer = '';
-      if (inside) reportError(new Error('Стрим закончился до закрытия UI-блока'));
+      if (inside) { if (!skipping) reportError(new Error('Стрим закончился до закрытия UI-блока')); }
       else emitText(tail);
     },
 

@@ -40,7 +40,7 @@ function beginAgentReply() {
 
 ## Проверить демо
 
-Node.js 24 и npm:
+Node.js 22.12+ (CI использует 24) и npm:
 
 ```bash
 npm ci
