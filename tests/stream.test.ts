@@ -140,3 +140,37 @@ test('skipping an oversized block respects JSON strings and chunk boundaries', (
     assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
   }
 });
+
+test('valid string with closing and opening tags gives the same result for any chunking', () => {
+  const tricky = structuredClone(metrics[1]) as Record<string, any>;
+  tricky.updateComponents.components[0].title = 'Теги </a2ui> и <a2ui> в строке';
+  const source = `До${frame([tricky as never])}После`;
+  for (const size of [1, 3, 11, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    for (let i = 0; i < source.length; i += size) s.push(source.slice(i, i + size));
+    s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, [tricky]); assert.equal(errors.length, 0);
+  }
+});
+
+test('cancel from onError during finish stops further output', () => {
+  const texts: string[] = []; const messages: unknown[] = [];
+  const s = createA2uiStream({
+    onText: t => texts.push(t), onMessage: m => messages.push(m),
+    onError: () => s.cancel(),
+  });
+  s.push('<a2ui>{"value":"bad</a2ui>После'); s.finish();
+  assert.deepEqual(texts, []); assert.deepEqual(messages, []);
+});
+
+test('oversized block with an unterminated string does not swallow the rest of the response', () => {
+  const source = `До<a2ui>{"v":"${'x'.repeat(33000)}</a2ui>После${frame(metrics)}`;
+  for (const size of [1000, 7777, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    for (let i = 0; i < source.length; i += size) s.push(source.slice(i, i + size));
+    s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+});
