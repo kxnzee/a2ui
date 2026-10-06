@@ -8,7 +8,10 @@ export function getAgentConfiguration() {
     const capabilities = processor.getClientCapabilities({ version: 'v0.9', includeInlineCatalogs: true });
     const catalogSchema = capabilities['v0.9']!.inlineCatalogs![0];
     for (const [name, component] of a2uiCatalog.components) {
-      catalogSchema.components![name].description = component.schema.description;
+      // Описания SDK не переносит в inline-каталог, добавляем вручную.
+      const target = catalogSchema?.components?.[name];
+      if (!target) throw new Error(`Формат inline-каталога SDK изменился: нет компонента ${name}`);
+      target.description = component.schema.description;
     }
     delete capabilities['v0.9']!.inlineCatalogs; // Схема передаётся отдельно.
     return structuredClone({

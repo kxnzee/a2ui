@@ -175,3 +175,16 @@ test('surface count is capped; the excess createSurface is reported, not rendere
   assert.equal(errors.length, 2);
   cleanup();
 });
+
+test('MetricCard formats grouped and fractional numbers without rounding', () => {
+  const processor = createA2uiProcessor(() => {});
+  const [create, update] = metricMessages();
+  processor.processMessages([create, update]);
+  const view = render(<A2uiView processor={processor} />);
+  assert.match(view.container.textContent!, /1\s250\s000/);
+  act(() => processor.processMessages([{ version: 'v0.9', updateComponents: { surfaceId: 'result', components: [
+    { id: 'root', component: 'MetricCard', title: 'Доля', value: 0.125 },
+  ] } }]));
+  assert.match(view.container.textContent!, /0,125/);
+  cleanup(); processor.model.dispose();
+});

@@ -74,15 +74,20 @@ export const MetricApi = {
   name: 'MetricCard',
   schema: z.object({
     title: z.string().trim().min(1).max(160),
-    value: z.number().finite(),
+    value: z.number().finite().safe(), // вне безопасного диапазона JSON-число теряет точность
     unit: z.string().trim().min(1).max(24).optional(),
   }).strict().describe('Одно известное числовое значение с названием и необязательной единицей. Не выдумывай значение; если данных нет, запроси их. Не имеет события выбора.'),
 };
 
+// Локаль берётся из lang страницы (по умолчанию ru-RU); дроби не округляются.
+const formatNumber = (value: number) => new Intl.NumberFormat(
+  document.documentElement.lang || 'ru-RU', { maximumFractionDigits: 20 },
+).format(value);
+
 const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
   <Card>
     <Statistic title={props.title} value={props.value} suffix={props.unit}
-      groupSeparator=" " decimalSeparator="," />
+      formatter={value => formatNumber(Number(value))} />
   </Card>
 ));
 
