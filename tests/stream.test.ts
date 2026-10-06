@@ -92,3 +92,12 @@ test('oversized block is dropped, text and following blocks survive', () => {
     assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
   }
 });
+
+test('markdown code fence around block JSON is tolerated', () => {
+  for (const fence of ['```json\n', '```\n', '```JSON ']) {
+    const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText() {}, onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(`<a2ui>\n${fence}${JSON.stringify(metrics[0])}\n\`\`\`\n</a2ui>`); s.finish();
+    assert.deepEqual(messages, [metrics[0]]); assert.equal(errors.length, 0);
+  }
+});

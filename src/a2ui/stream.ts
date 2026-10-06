@@ -63,7 +63,9 @@ export function createA2uiStream(options: StreamOptions) {
         }
         if (end < 0) break;
 
-        const json = buffer.slice(0, end);
+        // Модели часто оборачивают JSON в markdown-ограду; снимаем её перед разбором.
+        const json = buffer.slice(0, end).trim()
+          .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
         buffer = buffer.slice(end + CLOSE.length);
         inside = false;
         let message: A2uiMessage;
