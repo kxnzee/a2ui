@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createA2uiProcessor, PROTOCOL_VERSION, type A2uiCatalog, type ActionHandler } from './processor.js';
+import { A2uiError } from './errors.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
 export type A2uiResponseOptions = Pick<StreamOptions, 'onText' | 'onError'>;
@@ -12,8 +13,9 @@ export type A2uiResponse = {
 // Предел одновременных поверхностей по умолчанию: блок ограничен по размеру, а их число — нет.
 const DEFAULT_MAX_SURFACES = 10;
 
-const asError = (cause: unknown) => cause instanceof Error ? cause : new Error('Ошибка обработчика действия A2UI', { cause });
-const defaultActionError = (error: Error) => console.error(error);
+const asError = (cause: unknown) => cause instanceof A2uiError ? cause : new A2uiError(
+  'action-failed', cause instanceof Error ? cause.message : 'Ошибка обработчика действия A2UI', { cause });
+const defaultActionError = (error: A2uiError) => console.error(error);
 
 // Только A2UI: нет запроса, состояния чата, истории сообщений или транспорта.
 export function useA2ui({
@@ -24,7 +26,7 @@ export function useA2ui({
   catalogs: readonly A2uiCatalog[];
   onAction: ActionHandler;
   // Ошибка onAction (синхронная или отклонённый промис). Без него — console.error.
-  onActionError?: (error: Error) => void;
+  onActionError?: (error: A2uiError) => void;
   // Параметры текстового декодера (см. StreamOptions); значения читаются на каждый ответ.
   framing?: StreamOptions['framing'];
   maxBlockLength?: number;
@@ -54,14 +56,14 @@ export function useA2ui({
   }, catalogs));
 
   const beginResponse = useCallback((options: A2uiResponseOptions): A2uiResponse => {
-    if (!mounted.current) throw new Error('A2UI уже отключён');
+    if (!mounted.current) throw new A2uiError('disposed', 'A2UI уже отключён');
     active.current?.cancel();
     let ended = false;
     const decoder = createA2uiStream({
       ...options, framing: framingRef.current, maxBlockLength: maxBlockRef.current,
       onMessage: message => {
         if ('createSurface' in message && processor.model.surfacesMap.size >= maxSurfacesRef.current) {
-          throw new Error(`Слишком много поверхностей A2UI (максимум ${maxSurfacesRef.current})`);
+          throw new A2uiError('too-many-surfaces', `Слишком много поверхностей A2UI (максимум ${maxSurfacesRef.current})`);
         }
         processor.processMessages([message]);
       },

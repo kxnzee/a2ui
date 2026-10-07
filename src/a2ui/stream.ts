@@ -1,4 +1,5 @@
 import { A2uiMessageSchema, type A2uiMessage } from '@a2ui/web_core/v0_9';
+import { A2uiError } from './errors.js';
 
 // Обрамление блока в смешанном текстовом потоке. Не часть протокола A2UI: транспорт,
 // который отдаёт сообщения отдельно, обходится без декодера (processor.processMessages).
@@ -28,7 +29,7 @@ export type StreamOptions = {
   maxBlockLength?: number;
   onText: (delta: string) => void;
   onMessage: (message: A2uiMessage) => void;
-  onError?: (error: Error) => void;
+  onError?: (error: A2uiError) => void;
 };
 
 // Принимает уже декодированные текстовые чанки от существующего транспорта.
@@ -50,7 +51,7 @@ export function createA2uiStream(options: StreamOptions) {
   let held: string | undefined;
 
   const emitText = (text: string) => { if (text && !cancelled) options.onText(text); };
-  const reportError = (error: Error) => {
+  const reportError = (error: A2uiError) => {
     if (options.onError) options.onError(error);
     else throw error;
   };
@@ -111,7 +112,7 @@ export function createA2uiStream(options: StreamOptions) {
         // Отбрасываем блок целиком, текст после него сохраняется.
         skipping = true;
         skipString = skipEscaped = false;
-        reportError(new Error('UI-блок слишком большой'));
+        reportError(new A2uiError('block-too-large', 'UI-блок слишком большой'));
         continue;
       }
       if (end < 0) break;
@@ -125,20 +126,22 @@ export function createA2uiStream(options: StreamOptions) {
       try {
         message = A2uiMessageSchema.parse(JSON.parse(json));
       } catch (cause) {
-        reportError(new Error('Некорректный UI-блок: проверьте JSON и схему', { cause }));
+        reportError(new A2uiError('invalid-block', 'Некорректный UI-блок: проверьте JSON и схему', { cause }));
         continue;
       }
       try {
         options.onMessage(message);
       } catch (cause) {
-        reportError(new Error('Не удалось обработать сообщение A2UI', { cause }));
+        // Свои ошибки (например, too-many-surfaces) отдаём как есть, остальное оборачиваем.
+        reportError(cause instanceof A2uiError ? cause
+          : new A2uiError('message-rejected', 'Не удалось обработать сообщение A2UI', { cause }));
       }
     }
   };
 
   return {
     push(delta: string) {
-      if (ended) throw new Error('Стрим уже завершён');
+      if (ended) throw new A2uiError('stream-ended', 'Стрим уже завершён');
       if (cancelled) return;
       if (skipping && held !== undefined) {
         held += delta;
@@ -161,9 +164,9 @@ export function createA2uiStream(options: StreamOptions) {
         } else if (!skipping && buffer.includes(CLOSE)) {
           const plain = buffer.indexOf(CLOSE);
           buffer = buffer.slice(plain + CLOSE.length);
-          reportError(new Error('Некорректный UI-блок: проверьте JSON и схему'));
+          reportError(new A2uiError('invalid-block', 'Некорректный UI-блок: проверьте JSON и схему'));
         } else {
-          if (!skipping) reportError(new Error('Стрим закончился до закрытия UI-блока'));
+          if (!skipping) reportError(new A2uiError('unterminated-block', 'Стрим закончился до закрытия UI-блока'));
           buffer = '';
           break;
         }

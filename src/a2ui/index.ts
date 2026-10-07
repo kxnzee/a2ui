@@ -7,4 +7,5 @@ export {
 } from './processor.js';
 export { createA2uiStream, DEFAULT_FRAMING, type StreamOptions, type Framing } from './stream.js';
 export { getAgentConfiguration, defaultProtocolInstructions } from './agent.js';
+export { A2uiError, type A2uiErrorCode } from './errors.js';
 export { useA2ui, type A2uiResponse, type A2uiResponseOptions } from './useA2ui.js';

@@ -186,3 +186,11 @@ test('custom framing and block limit are honoured', () => {
   assert.equal(texts.join(''), 'АБ<a2ui>не блок</a2ui>В');
   assert.deepEqual(messages, [metrics[0]]); assert.equal(errors.length, 1);
 });
+
+test('errors carry stable codes', () => {
+  const codes: string[] = [];
+  const s = createA2uiStream({ maxBlockLength: 300, onText() {}, onMessage() { throw new Error('boom'); }, onError: e => codes.push(e.code) });
+  s.push(`<a2ui>{</a2ui>${frame([metrics[0]])}<a2ui>${'x'.repeat(400)}</a2ui><a2ui>{`); s.finish();
+  assert.throws(() => s.push('x'), (e: any) => e.code === 'stream-ended');
+  assert.deepEqual(codes, ['invalid-block', 'message-rejected', 'block-too-large', 'unterminated-block']);
+});
