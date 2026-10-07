@@ -1,4 +1,4 @@
-# Переносимый модуль A2UI · 0.5.0
+# Переносимый модуль A2UI · 0.6.0
 
 Протокол: A2UI v0.9. Каталог: `urn:kxnzee:a2ui:cards:v2`.
 
@@ -8,7 +8,8 @@
 
 | Файл | Назначение |
 | --- | --- |
-| catalog.tsx | Схемы и AntD-компоненты через createComponentImplementation, регистрация Catalog |
+| cards.tsx | Необязательный пример каталога: ClarificationCard и MetricCard на AntD, `cards` (каталог + инструкции), reopenClarification |
+| errors.ts | A2uiError и стабильные коды ошибок |
 | processor.ts | Создание стандартного MessageProcessor с каталогом и callback действия |
 | A2uiView.tsx | Подписки onSurfaceCreated/onSurfaceDeleted и рендер A2uiSurface |
 | useA2ui.ts | Lifecycle processor и подключение текстового декодера |
@@ -22,8 +23,10 @@
 
 ```tsx
 import { useA2ui, A2uiView } from './features/a2ui';
+import { cards } from './features/a2ui/cards'; // или ваш каталог, см. ниже
 
 const a2ui = useA2ui({
+  catalogs: [cards.catalog], // любые каталоги; массив держите стабильным (константа модуля)
   onAction: message => existingSendToAgent(message),
 });
 // Вызывайте при начале ответа агента, а не во время рендера.
@@ -68,6 +71,32 @@ JSON внутри блока может быть обёрнут в markdown-ог
 
 Ошибки JSON/конверта и ошибки обработки сообщения SDK передаются в onError отдельно; исходная ошибка доступна в error.cause. Без onError декодер выбрасывает ошибку — обработайте её в своём запросе. После ошибки отдельного блока обработка следующих блоков продолжается, если callback не отменил response. Незавершённый блок обнаруживается в finish. Блок длиннее maxBlockLength (по умолчанию 32 768 символов) отбрасывается целиком с ошибкой в onError, разбор ответа продолжается. cancel/clear из callback останавливает также остаток текущего чанка.
 
+## Свой каталог (любой функционал)
+
+Универсальный слой (`index.ts`: processor, хук, декодер, view, агентская конфигурация) не зависит от AntD и от конкретных компонентов. Каталог — параметр:
+
+```tsx
+import { Catalog } from '@a2ui/web_core/v0_9';
+import { createComponentImplementation } from '@a2ui/react/v0_9';
+import { z } from 'zod-a2ui'; // alias на Zod 3, см. зависимости
+
+const Badge = createComponentImplementation(
+  { name: 'Badge', schema: z.object({ text: z.string() }).strict().describe('Бейдж с текстом.') },
+  ({ props }) => <span>{props.text}</span>,
+);
+const badges = { catalog: new Catalog('urn:acme:badges:v1', [Badge]), instructions: 'Используй Badge для коротких меток.' };
+
+useA2ui({ catalogs: [badges.catalog], onAction });
+getAgentConfiguration(badges);                       // схемы и промпт для модели
+getAgentConfiguration(badges, { framing, protocolInstructions }); // свои теги и текст промпта
+```
+
+Ошибки — `A2uiError` с полем `code` (`block-too-large`, `invalid-block`, `message-rejected`, `unterminated-block`, `stream-ended`, `too-many-surfaces`, `action-failed`, `disposed`): текст для пользователя выбирает приложение. Для транспорта без текстового обрамления используйте `processor.processMessages` напрямую. `clear(surfaceIds?)` удаляет все поверхности processor либо только указанные.
+
+## Изменение API в 0.6
+
+`createA2uiProcessor(onAction, catalogs)` и `useA2ui({catalogs, ...})` требуют каталоги; `getAgentConfiguration(kit, options?)` принимает `{catalog, instructions}`. Встроенные карточки вынесены из `index.ts` в `cards.tsx` (`./cards` в npm-пакете): `a2uiCatalog` → `cards.catalog`, `CATALOG_INSTRUCTIONS` → `cards.instructions`. `reopen` убран из хука: используйте `reopenClarification(processor, surfaceId)`. Новые параметры: `framing`, `maxBlockLength`, `maxSurfaces`, `onActionError`.
+
 ## Изменение API в 0.5
 
 Собственный A2uiController удалён. Используйте createA2uiProcessor; хук возвращает processor вместо controller. У A2uiView prop называется processor. В web_core 0.11 processMessages принимает массив; один объект передаётся как [message]. Поля questionId, answered и error убраны из ClarificationCard; questionId остаётся в context события, статус отправки принадлежит чату. ID каталога обновлён до urn:kxnzee:a2ui:cards:v2. Сгенерируйте dist/agent заново вместе с обновлением фронта.
@@ -83,7 +112,7 @@ processor.model.surfacesMap;
 processor.model.dispose();
 ```
 
-Конфигурация экспортируется через getClientCapabilities({version: 'v0.9', includeInlineCatalogs: true}). SDK генерирует inline-каталог; getAgentConfiguration возвращает его отдельно как catalogSchema и сохраняет description исходных схем. CATALOG_INSTRUCTIONS остаётся рядом с регистрацией в catalog.tsx: эта версия Catalog не имеет свойства instructions. Для переноса используйте зависимости и override из docs/integration.md; alias zod-a2ui и override ядра нужны также в вашем приложении.
+Конфигурация экспортируется через getClientCapabilities({version: 'v0.9', includeInlineCatalogs: true}). SDK генерирует inline-каталог; getAgentConfiguration возвращает его отдельно как catalogSchema и сохраняет description исходных схем. Инструкции модели хранятся рядом с каталогом в паре `{catalog, instructions}` (A2uiCatalogKit): эта версия Catalog не имеет свойства instructions. Для переноса используйте зависимости и override из docs/integration.md; alias zod-a2ui и override ядра нужны также в вашем приложении.
 
 
 ## package.json приложения при переносе исходников

@@ -86,9 +86,10 @@ export function useA2ui({
     return response;
   }, [processor]);
 
-  const clear = useCallback(() => {
+  // Без аргумента удаляет все поверхности processor; с surfaceIds — только указанные.
+  const clear = useCallback((surfaceIds?: readonly string[]) => {
     active.current?.cancel();
-    for (const surfaceId of processor.model.surfacesMap.keys()) {
+    for (const surfaceId of surfaceIds ?? [...processor.model.surfacesMap.keys()]) {
       processor.processMessages([{ version: PROTOCOL_VERSION, deleteSurface: { surfaceId } }]);
     }
   }, [processor]);

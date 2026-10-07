@@ -1,5 +1,6 @@
 // Универсальный слой: не зависит от AntD и от конкретных компонентов.
 // Готовые карточки (AntD) — отдельный необязательный модуль ./cards.js.
+export type { A2uiMessage } from '@a2ui/web_core/v0_9';
 export { A2uiView } from './A2uiView.js';
 export {
   createA2uiProcessor, PROTOCOL_VERSION,

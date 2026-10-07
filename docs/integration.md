@@ -1,4 +1,4 @@
-# Подключение A2UI 0.5.0 к существующему UI и чату
+# Подключение A2UI 0.6.0 к существующему UI и чату
 
 Переносите только [`src/a2ui`](../src/a2ui). [README модуля](../src/a2ui/README.md) содержит карту файлов, зависимости, стандартные сообщения и правила lifecycle. [`src/example/AgentChat.tsx`](../src/example/AgentChat.tsx) — компилируемый внешний адаптер вашего запроса, не новый HTTP-клиент.
 
@@ -6,9 +6,11 @@
 
 ```tsx
 import { useA2ui, A2uiView, type A2uiActionMessage } from './features/a2ui';
+import { cards } from './features/a2ui/cards'; // либо ваш каталог
 
 // Внутри компонента чата:
 const a2ui = useA2ui({
+  catalogs: [cards.catalog],
   onAction: (message: A2uiActionMessage) => send(JSON.stringify(message)),
 });
 
@@ -94,8 +96,9 @@ a2ui.processor.processMessages(a2uiProtocolMessages);
 
 ```ts
 import { getAgentConfiguration } from './features/a2ui';
+import { cards } from './features/a2ui/cards';
 
-const config = getAgentConfiguration();
+const config = getAgentConfiguration(cards);
 const systemPrompt = [
   yourExistingPrompt,
   config.instructions,
@@ -106,7 +109,7 @@ const systemPrompt = [
 // Если она поддерживает capabilities negotiation, передайте config.capabilities.
 ```
 
-Не нужно регистрировать ещё один независимый JSON-контракт или поддерживать схемы в prompt вручную. Каталог и схемы берутся из SDK и единой регистрации компонентов. Модель выбирает `ClarificationCard` или `MetricCard` по их описанию и CATALOG_INSTRUCTIONS. Сам React SDK не вызывает вашу модель и не меняет её prompt.
+Не нужно регистрировать ещё один независимый JSON-контракт или поддерживать схемы в prompt вручную. Каталог и схемы берутся из SDK и единой регистрации компонентов. Модель выбирает `ClarificationCard` или `MetricCard` по их описанию и инструкциям каталога (cards.instructions). Сам React SDK не вызывает вашу модель и не меняет её prompt.
 
 Если агент находится на отдельном backend без React/Node.js, заранее выполните:
 
@@ -210,14 +213,14 @@ onError получает ошибки JSON/конверта и ошибки об
 
 ## Добавление компонентов
 
-В catalog.tsx добавьте Zod-схему с description, React-реализацию через createComponentImplementation и регистрацию в Catalog. Общие инструкции хранятся в CATALOG_INSTRUCTIONS. Затем повторите export:agent. Дополнительный контроллер не нужен: MessageProcessor использует component из updateComponents и зарегистрированный каталог. Доменная обработка новых событий при необходимости добавляется в обработчик onAction.
+В cards.tsx (или в своём файле с каталогом, см. раздел «Свой каталог» в src/a2ui/README.md) добавьте Zod-схему с description, React-реализацию через createComponentImplementation и регистрацию в Catalog. Инструкции модели передаются вместе с каталогом как `{catalog, instructions}`. Затем повторите export:agent. Дополнительный контроллер не нужен: MessageProcessor использует component из updateComponents и зарегистрированный каталог. Доменная обработка новых событий при необходимости добавляется в обработчик onAction.
 
 
 ## Какие файлы переносить
 
 | Куда | Что перенести |
 | --- | --- |
-| Ваш React UI | Весь src/a2ui, либо локальный npm-пакет 0.5.0 |
+| Ваш React UI | Весь src/a2ui, либо локальный npm-пакет 0.6.0 |
 | Интеграция локального агента | Весь dist/agent после npm run export:agent |
 | Внутренний npm registry/кэш | Зависимости из package.json с закреплёнными версиями |
 

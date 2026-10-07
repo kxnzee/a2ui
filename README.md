@@ -1,4 +1,4 @@
-# A2UI для готового React/AntD-чата · 0.5.0
+# A2UI для готового React/AntD-чата · 0.6.0
 
 Протокол A2UI v0.9, `@a2ui/react` 0.9.1 и `@a2ui/web_core` 0.11.0, каталог `urn:kxnzee:a2ui:cards:v2`. Два зарегистрированных компонента: **ClarificationCard** для уточнения с вариантами и **MetricCard** для числового показателя. Агент выдаёт стандартные сообщения A2UI; официальный MessageProcessor валидирует их по единому каталогу и рендерит через @a2ui/react. Сервер, запрос к DeepSeek и транспорт не добавлены.
 
@@ -30,7 +30,7 @@ function beginAgentReply() {
 
 Поддержаны оба режима: HTTP chunked с текстовыми дельтами и полный POST-ответ с assistant.content. Готовые JSON-сообщения: `a2ui.processor.processMessages(messages)`. Историю `messages`, loading, ошибки отправки и повтор ведёт ваш чат.
 
-`onAction` получает стандартное `{version, action}`. Схемы/инструкции агенту экспортируются из Catalog и SDK через getAgentConfiguration(). Регистрация на фронте не доставляет их модели автоматически; подключите конфигурацию в существующей интеграции.
+`onAction` получает стандартное `{version, action}`. Схемы/инструкции агенту экспортируются из Catalog и SDK через getAgentConfiguration(kit), где kit — `{catalog, instructions}` (для готовых карточек `cards` из `src/a2ui/cards.tsx`). Регистрация на фронте не доставляет их модели автоматически; подключите конфигурацию в существующей интеграции.
 
 ## Совместимость зависимостей
 
@@ -89,7 +89,7 @@ npm run package:demo
 npm run build
 npm pack
 # В вашем приложении:
-npm install /path/to/kxnzee-a2ui-clarification-ui-0.5.0.tgz
+npm install /path/to/kxnzee-a2ui-clarification-ui-0.6.0.tgz
 ```
 
 Пакет не опубликован в npm. React и ReactDOM предоставляет приложение. Компоненты адаптированы и проверены с AntD 5.22.5. Изменения API 0.5 описаны в [README модуля](src/a2ui/README.md#изменение-api-в-05). При обновлении фронта повторите export:agent и замените конфигурацию модели вместе с каталогом.

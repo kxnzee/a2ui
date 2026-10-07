@@ -83,7 +83,7 @@ export const MetricApi = {
 // Локаль берётся из lang страницы (по умолчанию ru-RU). Значащие цифры, а не знаки
 // после запятой: малые значения вроде 1e-21 не должны превращаться в 0.
 const formatNumber = (value: number) => new Intl.NumberFormat(
-  document.documentElement.lang || 'ru-RU', { maximumSignificantDigits: 21 },
+  (typeof document === 'undefined' ? '' : document.documentElement.lang) || 'ru-RU', { maximumSignificantDigits: 21 },
 ).format(value);
 
 const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
