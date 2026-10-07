@@ -3,7 +3,7 @@ import { Button, Card, Statistic, Space } from 'antd';
 import { z } from 'zod-a2ui';
 import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
 import { createComponentImplementation } from '@a2ui/react/v0_9';
-import type { A2uiCatalogKit } from './processor.js';
+import type { A2uiCatalogKit, A2uiProcessor } from './processor.js';
 
 const OptionSchema = z.object({
   id: z.string().min(1).max(100),
@@ -104,6 +104,20 @@ onSelect — event с name="clarification_answer" и context: optionId (binding 
 export const cardsCatalog = new Catalog(
   CATALOG_ID, [ClarificationCard, MetricCard],
 );
+
+// Разрешает повторный выбор в карточках поверхности: сбрасывает привязанный selected
+// стандартным updateDataModel (например, после ошибки отправки). Знание о компоненте
+// живёт здесь, в каталоге, а не в универсальном хуке.
+export function reopenClarification(processor: A2uiProcessor, surfaceId: string) {
+  const surface = processor.model.getSurface(surfaceId);
+  if (!surface) return;
+  for (const [, component] of surface.componentsModel.entries) {
+    const path = component.type === ClarificationApi.name ? component.properties.selected?.path : undefined;
+    if (typeof path === 'string') {
+      processor.processMessages([{ version: 'v0.9', updateDataModel: { surfaceId, path, value: '' } }]);
+    }
+  }
+}
 
 // Передаётся в useA2ui({ catalogs: [cards.catalog] }) и getAgentConfiguration(cards).
 export const cards: A2uiCatalogKit = { catalog: cardsCatalog, instructions: CATALOG_INSTRUCTIONS };

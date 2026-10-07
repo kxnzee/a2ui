@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { A2uiView, useA2ui, type A2uiActionMessage } from '../a2ui/index.js';
-import { cards } from '../a2ui/cards.js';
+import { cards, reopenClarification } from '../a2ui/cards.js';
 import { sendChatRequest, type ChatMessage, type Send } from './request.js';
 
 // Только пример чата. Для переноса нужен лишь каталог src/a2ui.
@@ -22,7 +22,7 @@ export function AgentChat({ send, messages, onMessagesChange, stream = true }: {
       onError: e => {
         setError(e.message);
         // Карточка заблокирована после клика: разрешаем повторить выбор.
-        if (typeof input !== 'string') a2ui.reopen(input.action.surfaceId);
+        if (typeof input !== 'string') reopenClarification(a2ui.processor, input.action.surfaceId);
       },
       onMessagesChange,
     });

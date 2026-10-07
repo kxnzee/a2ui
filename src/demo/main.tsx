@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Alert, Button, Card, Checkbox, ConfigProvider, Space, Typography } from 'antd';
 import { A2uiView, useA2ui, type A2uiActionMessage } from '../a2ui/index.js';
-import { cards } from '../a2ui/cards.js';
+import { cards, reopenClarification } from '../a2ui/cards.js';
 import './style.css';
 
 function Demo() {
@@ -49,8 +49,8 @@ function Demo() {
       if (current === generation.current) {
         setError(error instanceof Error ? error.message : 'Ошибка отправки');
         setDisabled(false);
-        // Карточка заблокирована выбором; reopen разрешает повторный выбор.
-        if (a2ui.processor.model.getSurface(message.action.surfaceId) === surface) a2ui.reopen(message.action.surfaceId);
+        // Карточка заблокирована выбором; reopenClarification разрешает повторный выбор.
+        if (a2ui.processor.model.getSurface(message.action.surfaceId) === surface) reopenClarification(a2ui.processor, message.action.surfaceId);
       }
     } finally {
       if (current === generation.current) sending.current = false;
