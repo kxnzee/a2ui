@@ -174,3 +174,15 @@ test('oversized block with an unterminated string does not swallow the rest of t
     assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
   }
 });
+
+test('custom framing and block limit are honoured', () => {
+  const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+  const s = createA2uiStream({
+    framing: { open: '[[ui]]', close: '[[/ui]]' }, maxBlockLength: 300,
+    onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e),
+  });
+  const json = JSON.stringify(metrics[0]);
+  s.push(`А[[ui]]${json}[[/ui]]Б<a2ui>не блок</a2ui>[[ui]]${'x'.repeat(400)}[[/ui]]В`); s.finish();
+  assert.equal(texts.join(''), 'АБ<a2ui>не блок</a2ui>В');
+  assert.deepEqual(messages, [metrics[0]]); assert.equal(errors.length, 1);
+});

@@ -129,5 +129,8 @@ test('core works with a custom catalog and does not know the bundled cards', asy
   assert.equal(config.catalogSchema.components!.Badge.description, 'Бейдж с текстом.');
   assert.match(config.instructions, /Только бейджи\./);
   assert.doesNotMatch(config.instructions, /ClarificationCard/);
+  const custom = getAgentConfiguration({ catalog, instructions: 'x' }, { framing: { open: '[[ui]]', close: '[[/ui]]' } });
+  assert.match(custom.instructions, /\[\[ui\]\]JSON\[\[\/ui\]\]/);
+  assert.equal(getAgentConfiguration({ catalog, instructions: 'x' }, { protocolInstructions: 'Свой текст' }).instructions, 'Свой текст\nx');
   processor.model.dispose();
 });

@@ -3,7 +3,7 @@ import { Button, Card, Statistic, Space } from 'antd';
 import { z } from 'zod-a2ui';
 import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
 import { createComponentImplementation } from '@a2ui/react/v0_9';
-import type { A2uiCatalogKit, A2uiProcessor } from './processor.js';
+import { PROTOCOL_VERSION, type A2uiCatalogKit, type A2uiProcessor } from './processor.js';
 
 const OptionSchema = z.object({
   id: z.string().min(1).max(100),
@@ -114,7 +114,7 @@ export function reopenClarification(processor: A2uiProcessor, surfaceId: string)
   for (const [, component] of surface.componentsModel.entries) {
     const path = component.type === ClarificationApi.name ? component.properties.selected?.path : undefined;
     if (typeof path === 'string') {
-      processor.processMessages([{ version: 'v0.9', updateDataModel: { surfaceId, path, value: '' } }]);
+      processor.processMessages([{ version: PROTOCOL_VERSION, updateDataModel: { surfaceId, path, value: '' } }]);
     }
   }
 }

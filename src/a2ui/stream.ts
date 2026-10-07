@@ -1,13 +1,14 @@
 import { A2uiMessageSchema, type A2uiMessage } from '@a2ui/web_core/v0_9';
 
-const OPEN = '<a2ui>';
-const CLOSE = '</a2ui>';
-const MAX_BLOCK_LENGTH = 32_768;
-const MAX_HELD_LENGTH = 262_144; // предел запасного буфера при пропуске большого блока
+// Обрамление блока в смешанном текстовом потоке. Не часть протокола A2UI: транспорт,
+// который отдаёт сообщения отдельно, обходится без декодера (processor.processMessages).
+export const DEFAULT_FRAMING = { open: '<a2ui>', close: '</a2ui>' } as const;
+export type Framing = { open: string; close: string };
+const DEFAULT_MAX_BLOCK_LENGTH = 32_768;
 
 // Ищет закрывающий тег вне строковых литералов JSON, чтобы `</a2ui>` внутри
 // значения (например, в тексте вопроса) не обрывал блок.
-function findClose(text: string) {
+function findClose(text: string, close: string) {
   let inString = false;
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
@@ -15,12 +16,16 @@ function findClose(text: string) {
       if (char === '\\') i++;
       else if (char === '"') inString = false;
     } else if (char === '"') inString = true;
-    else if (char === '<' && text.startsWith(CLOSE, i)) return i;
+    else if (char === close[0] && text.startsWith(close, i)) return i;
   }
   return -1;
 }
 
 export type StreamOptions = {
+  // Теги блока, по умолчанию <a2ui>…</a2ui>.
+  framing?: Framing;
+  // Максимальная длина одного блока; больший блок отбрасывается целиком.
+  maxBlockLength?: number;
   onText: (delta: string) => void;
   onMessage: (message: A2uiMessage) => void;
   onError?: (error: Error) => void;
@@ -28,6 +33,9 @@ export type StreamOptions = {
 
 // Принимает уже декодированные текстовые чанки от существующего транспорта.
 export function createA2uiStream(options: StreamOptions) {
+  const { open: OPEN, close: CLOSE } = options.framing ?? DEFAULT_FRAMING;
+  const MAX_BLOCK_LENGTH = options.maxBlockLength ?? DEFAULT_MAX_BLOCK_LENGTH;
+  const MAX_HELD_LENGTH = MAX_BLOCK_LENGTH * 8; // предел запасного буфера при пропуске большого блока
   let buffer = '';
   let inside = false;
   let ended = false; // finish или cancel: новые push запрещены
@@ -55,14 +63,14 @@ export function createA2uiStream(options: StreamOptions) {
       else if (skipString) {
         if (char === '\\') skipEscaped = true;
         else if (char === '"') skipString = false;
-        else if (char === '<' && held === undefined && buffer.startsWith(CLOSE, i)) {
+        else if (char === CLOSE[0] && held === undefined && buffer.startsWith(CLOSE, i)) {
           held = buffer.slice(i + CLOSE.length);
         }
       } else if (char === '"') skipString = true;
-      else if (char === '<' && buffer.startsWith(CLOSE, i)) {
+      else if (char === CLOSE[0] && buffer.startsWith(CLOSE, i)) {
         buffer = buffer.slice(i + CLOSE.length);
         return true;
-      } else if (char === '<' && CLOSE.startsWith(buffer.slice(i))) {
+      } else if (char === CLOSE[0] && CLOSE.startsWith(buffer.slice(i))) {
         buffer = buffer.slice(i); // возможное начало закрывающего тега в следующем чанке
         return false;
       }
@@ -97,7 +105,7 @@ export function createA2uiStream(options: StreamOptions) {
         held = undefined;
         continue;
       }
-      const end = findClose(buffer);
+      const end = findClose(buffer, CLOSE);
       if ((end < 0 && buffer.length > MAX_BLOCK_LENGTH + CLOSE.length) ||
           end > MAX_BLOCK_LENGTH) {
         // Отбрасываем блок целиком, текст после него сохраняется.

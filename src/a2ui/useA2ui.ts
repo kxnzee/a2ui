@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createA2uiProcessor, type A2uiCatalog, type ActionHandler } from './processor.js';
+import { createA2uiProcessor, PROTOCOL_VERSION, type A2uiCatalog, type ActionHandler } from './processor.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
 export type A2uiResponseOptions = Pick<StreamOptions, 'onText' | 'onError'>;
@@ -9,23 +9,37 @@ export type A2uiResponse = {
   cancel: () => void;
 };
 
-// Предел одновременных поверхностей: блок ограничен по размеру, но их число — нет.
-const MAX_SURFACES = 10;
+// Предел одновременных поверхностей по умолчанию: блок ограничен по размеру, а их число — нет.
+const DEFAULT_MAX_SURFACES = 10;
 
 const asError = (cause: unknown) => cause instanceof Error ? cause : new Error('Ошибка обработчика действия A2UI', { cause });
 const defaultActionError = (error: Error) => console.error(error);
 
 // Только A2UI: нет запроса, состояния чата, истории сообщений или транспорта.
-export function useA2ui({ catalogs, onAction, onActionError = defaultActionError }: {
+export function useA2ui({
+  catalogs, onAction, onActionError = defaultActionError,
+  framing, maxBlockLength, maxSurfaces = DEFAULT_MAX_SURFACES,
+}: {
   // Каталоги компонентов, доступные агенту. Читаются один раз при создании processor.
   catalogs: readonly A2uiCatalog[];
   onAction: ActionHandler;
   // Ошибка onAction (синхронная или отклонённый промис). Без него — console.error.
   onActionError?: (error: Error) => void;
+  // Параметры текстового декодера (см. StreamOptions); значения читаются на каждый ответ.
+  framing?: StreamOptions['framing'];
+  maxBlockLength?: number;
+  // Предел одновременных поверхностей; Infinity отключает ограничение.
+  maxSurfaces?: number;
 }) {
   const actionRef = useRef(onAction);
   const actionErrorRef = useRef(onActionError);
-  useLayoutEffect(() => { actionRef.current = onAction; actionErrorRef.current = onActionError; });
+  const framingRef = useRef(framing);
+  const maxBlockRef = useRef(maxBlockLength);
+  const maxSurfacesRef = useRef(maxSurfaces);
+  useLayoutEffect(() => {
+    actionRef.current = onAction; actionErrorRef.current = onActionError;
+    framingRef.current = framing; maxBlockRef.current = maxBlockLength; maxSurfacesRef.current = maxSurfaces;
+  });
   const mounted = useRef(true);
   const active = useRef<A2uiResponse | undefined>(undefined);
   // useState, а не useMemo: React вправе выбросить мемоизированное значение,
@@ -44,10 +58,10 @@ export function useA2ui({ catalogs, onAction, onActionError = defaultActionError
     active.current?.cancel();
     let ended = false;
     const decoder = createA2uiStream({
-      ...options,
+      ...options, framing: framingRef.current, maxBlockLength: maxBlockRef.current,
       onMessage: message => {
-        if ('createSurface' in message && processor.model.surfacesMap.size >= MAX_SURFACES) {
-          throw new Error(`Слишком много поверхностей A2UI (максимум ${MAX_SURFACES})`);
+        if ('createSurface' in message && processor.model.surfacesMap.size >= maxSurfacesRef.current) {
+          throw new Error(`Слишком много поверхностей A2UI (максимум ${maxSurfacesRef.current})`);
         }
         processor.processMessages([message]);
       },
@@ -73,7 +87,7 @@ export function useA2ui({ catalogs, onAction, onActionError = defaultActionError
   const clear = useCallback(() => {
     active.current?.cancel();
     for (const surfaceId of processor.model.surfacesMap.keys()) {
-      processor.processMessages([{ version: 'v0.9', deleteSurface: { surfaceId } }]);
+      processor.processMessages([{ version: PROTOCOL_VERSION, deleteSurface: { surfaceId } }]);
     }
   }, [processor]);
 

@@ -223,3 +223,14 @@ test('reopen lets the user retry after a send error in AgentChat', async () => {
   cleanup();
   await act(async () => {});
 });
+
+test('maxSurfaces option replaces the default cap', () => {
+  const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {}, maxSurfaces: 2 }));
+  const errors: Error[] = [];
+  const response = hook.result.current.beginResponse({ onText() {}, onError: e => errors.push(e) });
+  const create = (n: number) => frame([{ version: 'v0.9', createSurface: { surfaceId: `s${n}`, catalogId: cards.catalog.id } }]);
+  act(() => { for (let n = 0; n < 4; n++) response.push(create(n)); response.finish(); });
+  assert.equal(hook.result.current.processor.model.surfacesMap.size, 2);
+  assert.equal(errors.length, 2);
+  cleanup();
+});
