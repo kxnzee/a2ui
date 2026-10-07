@@ -234,3 +234,13 @@ test('maxSurfaces option replaces the default cap', () => {
   assert.equal(errors.length, 2);
   cleanup();
 });
+
+test('createSurface with a catalog that is not connected is reported as unknown-catalog', () => {
+  const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
+  const codes: string[] = [];
+  const response = hook.result.current.beginResponse({ onText() {}, onError: e => codes.push(e.code) });
+  act(() => { response.push(frame([{ version: 'v0.9', createSurface: { surfaceId: 's', catalogId: 'urn:acme:other:v9' } }])); response.finish(); });
+  assert.deepEqual(codes, ['unknown-catalog']);
+  assert.equal(hook.result.current.processor.model.surfacesMap.size, 0);
+  cleanup();
+});
