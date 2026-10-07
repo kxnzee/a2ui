@@ -119,7 +119,7 @@ npm run export:agent
 
 Перенесите **весь `dist/agent`** в контур. Основные файлы: catalogSchema.json, catalog.json, protocolSchema.json, capabilities.json, instructions.txt, examples.json. Рядом скопированы оригинальные JSON-схемы из установленного SDK, включая common_types.json, для локального разрешения $ref. Backend читает эти файлы как данные; npm и React ему не нужны. URI catalogId идентифицирует каталог, но не требует запроса в интернет. Конфигурацию обновляйте вместе с версией фронта. capabilities содержит поддерживаемый catalogId; inline-каталог передаётся отдельно в catalogSchema.json. getAgentConfiguration возвращает независимые копии схем.
 
-catalog.json генерируется из того же inline-каталога и добавляет определения anyComponent, anyFunction и theme для стандартных ссылок протокола. В JSON Schema resolver зарегистрируйте локальные файлы по их $id, включая catalog.json под https://a2ui.org/specification/v0_9/catalog.json. Этот $id — адрес подключения схемы; идентификатор самого UI-каталога остаётся urn:kxnzee:a2ui:cards:v2. Сетевые запросы для разрешения ссылок не нужны. Meta-schema Draft 2020-12 предоставляет ваш JSON Schema валидатор. После успешного формирования конфигурации export:agent очищает ранее сгенерированный dist/agent, чтобы старые схемы не оставались в комплекте.
+catalog.json генерируется из того же inline-каталога и добавляет определения anyComponent, anyFunction и theme для стандартных ссылок протокола. В JSON Schema resolver зарегистрируйте локальные файлы по их $id, включая catalog.json под https://a2ui.org/specification/v0_9/catalog.json. Этот $id — адрес подключения схемы; идентификатор самого UI-каталога остаётся urn:a2ui:cards:v1. Сетевые запросы для разрешения ссылок не нужны. Meta-schema Draft 2020-12 предоставляет ваш JSON Schema валидатор. После успешного формирования конфигурации export:agent очищает ранее сгенерированный dist/agent, чтобы старые схемы не оставались в комплекте.
 
 ## Ответ агента
 
@@ -127,7 +127,7 @@ catalog.json генерируется из того же inline-каталога
 
 ```text
 Вот показатель.
-<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:kxnzee:a2ui:cards:v2"}}</a2ui>
+<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:a2ui:cards:v1"}}</a2ui>
 <a2ui>{"version":"v0.9","updateComponents":{"surfaceId":"result","components":[{"id":"root","component":"MetricCard","title":"Выручка","value":1250000,"unit":"₽"}]}}</a2ui>
 ```
 
@@ -140,7 +140,7 @@ catalog.json генерируется из того же inline-каталога
     "version": "v0.9",
     "createSurface": {
       "surfaceId": "question",
-      "catalogId": "urn:kxnzee:a2ui:cards:v2"
+      "catalogId": "urn:a2ui:cards:v1"
     }
   },
   {

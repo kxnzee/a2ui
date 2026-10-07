@@ -1,6 +1,6 @@
 # A2UI для готового React/AntD-чата · 0.6.0
 
-Протокол A2UI v0.9, `@a2ui/react` 0.9.1 и `@a2ui/web_core` 0.11.0, каталог `urn:kxnzee:a2ui:cards:v2`. Два зарегистрированных компонента: **ClarificationCard** для уточнения с вариантами и **MetricCard** для числового показателя. Агент выдаёт стандартные сообщения A2UI; официальный MessageProcessor валидирует их по единому каталогу и рендерит через @a2ui/react. Сервер, запрос к DeepSeek и транспорт не добавлены.
+Протокол A2UI v0.9, `@a2ui/react` 0.9.1 и `@a2ui/web_core` 0.11.0, каталог `urn:a2ui:cards:v1`. Два зарегистрированных компонента: **ClarificationCard** для уточнения с вариантами и **MetricCard** для числового показателя. Агент выдаёт стандартные сообщения A2UI; официальный MessageProcessor валидирует их по единому каталогу и рендерит через @a2ui/react. Сервер, запрос к DeepSeek и транспорт не добавлены.
 
 ## Перенос в ваш готовый UI и чат
 
@@ -59,7 +59,7 @@ npm run check
 
 ```text
 Вот показатель.
-<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:kxnzee:a2ui:cards:v2"}}</a2ui>
+<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:a2ui:cards:v1"}}</a2ui>
 <a2ui>{"version":"v0.9","updateComponents":{"surfaceId":"result","components":[{"id":"root","component":"MetricCard","title":"Выручка","value":1250000,"unit":"₽"}]}}</a2ui>
 ```
 
@@ -89,7 +89,7 @@ npm run package:demo
 npm run build
 npm pack
 # В вашем приложении:
-npm install /path/to/kxnzee-a2ui-clarification-ui-0.6.0.tgz
+npm install /path/to/a2ui-clarification-ui-0.6.0.tgz
 ```
 
 Пакет не опубликован в npm. React и ReactDOM предоставляет приложение. Компоненты адаптированы и проверены с AntD 5.22.5. Изменения API 0.5 описаны в [README модуля](src/a2ui/README.md#изменение-api-в-05). При обновлении фронта повторите export:agent и замените конфигурацию модели вместе с каталогом.

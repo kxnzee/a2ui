@@ -1,6 +1,6 @@
 # Переносимый модуль A2UI · 0.6.0
 
-Протокол: A2UI v0.9. Каталог: `urn:kxnzee:a2ui:cards:v2`.
+Протокол: A2UI v0.9. Каталог: `urn:a2ui:cards:v1`.
 
 **Перед копированием добавьте в свой package.json alias `zod-a2ui` и `overrides` для `@a2ui/web_core` ([docs/integration.md](../../docs/integration.md#зависимости-в-приложении)): без них catalog.tsx не соберётся, а SDK получит две копии ядра.**
 
@@ -95,11 +95,14 @@ getAgentConfiguration(badges, { framing, protocolInstructions }); // свои т
 
 ## Изменение API в 0.6
 
+ID каталога карточек нейтральный и начинается с первой версии: `urn:a2ui:cards:v1` (прежних потребителей нет). Свой каталог называйте `urn:<организация>:<приложение>:<имя>:vN` и поднимайте N при любом ломающем изменении схемы.
+
+
 `createA2uiProcessor(onAction, catalogs)` и `useA2ui({catalogs, ...})` требуют каталоги; `getAgentConfiguration(kit, options?)` принимает `{catalog, instructions}`. Встроенные карточки вынесены из `index.ts` в `cards.tsx` (`./cards` в npm-пакете): `a2uiCatalog` → `cards.catalog`, `CATALOG_INSTRUCTIONS` → `cards.instructions`. `reopen` убран из хука: используйте `reopenClarification(processor, surfaceId)`. Новые параметры: `framing`, `maxBlockLength`, `maxSurfaces`, `onActionError`.
 
 ## Изменение API в 0.5
 
-Собственный A2uiController удалён. Используйте createA2uiProcessor; хук возвращает processor вместо controller. У A2uiView prop называется processor. В web_core 0.11 processMessages принимает массив; один объект передаётся как [message]. Поля questionId, answered и error убраны из ClarificationCard; questionId остаётся в context события, статус отправки принадлежит чату. ID каталога обновлён до urn:kxnzee:a2ui:cards:v2. Сгенерируйте dist/agent заново вместе с обновлением фронта.
+Собственный A2uiController удалён. Используйте createA2uiProcessor; хук возвращает processor вместо controller. У A2uiView prop называется processor. В web_core 0.11 processMessages принимает массив; один объект передаётся как [message]. Поля questionId, answered и error убраны из ClarificationCard; questionId остаётся в context события, статус отправки принадлежит чату. Сгенерируйте dist/agent заново вместе с обновлением фронта.
 
 
 ## SDK 0.11: актуальные обращения

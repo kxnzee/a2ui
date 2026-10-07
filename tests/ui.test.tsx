@@ -170,7 +170,7 @@ test('surface count is capped; the excess createSurface is reported, not rendere
   const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
   const errors: Error[] = [];
   const response = hook.result.current.beginResponse({ onText() {}, onError: e => errors.push(e) });
-  const create = (n: number) => frame([{ version: 'v0.9', createSurface: { surfaceId: `s${n}`, catalogId: 'urn:kxnzee:a2ui:cards:v2' } }]);
+  const create = (n: number) => frame([{ version: 'v0.9', createSurface: { surfaceId: `s${n}`, catalogId: 'urn:a2ui:cards:v1' } }]);
   act(() => { for (let n = 0; n < 12; n++) response.push(create(n)); response.finish(); });
   assert.equal(hook.result.current.processor.model.surfacesMap.size, 10);
   assert.equal(errors.length, 2);
