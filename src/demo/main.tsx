@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Alert, Button, Card, Checkbox, ConfigProvider, Space, Typography } from 'antd';
 import { A2uiView, useA2ui, type A2uiActionMessage } from '../a2ui/index.js';
+import { cards } from '../a2ui/cards.js';
 import './style.css';
 
 function Demo() {
@@ -16,7 +17,7 @@ function Demo() {
   const sending = useRef(false);
   const cancelRef = useRef<() => void>(() => {});
   failRef.current = failSend;
-  const a2ui = useA2ui({ onAction: async message => {
+  const a2ui = useA2ui({ catalogs: [cards.catalog], onAction: async message => {
     const surface = a2ui.processor.model.getSurface(message.action.surfaceId);
     if (sending.current || !surface) return;
     sending.current = true;

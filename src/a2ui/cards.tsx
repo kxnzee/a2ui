@@ -3,6 +3,7 @@ import { Button, Card, Statistic, Space } from 'antd';
 import { z } from 'zod-a2ui';
 import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
 import { createComponentImplementation } from '@a2ui/react/v0_9';
+import type { A2uiCatalogKit } from './processor.js';
 
 const OptionSchema = z.object({
   id: z.string().min(1).max(100),
@@ -92,7 +93,7 @@ const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
   </Card>
 ));
 
-export const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
+const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
 ID вариантов должны быть уникальны. selected привяжи к абсолютному пути data model и инициализируй пустой строкой.
 onSelect — event с name="clarification_answer" и context: optionId (binding к selected). Вопрос определяют surfaceId и sourceComponentId из действия.
 После клика карточка блокируется сама. Чтобы разрешить повторный выбор, приложение меняет selected через updateDataModel (например, на пустую строку). Необязательный disabled (например, binding к /disabled) блокирует варианты принудительно. Статус отправки и ошибки обрабатывает приложение, не A2UI.
@@ -100,6 +101,9 @@ onSelect — event с name="clarification_answer" и context: optionId (binding 
 Корневой компонент имеет id="root". Можно обновлять существующие поверхности; удаляй завершённую карточку через deleteSurface, если она больше не нужна.`;
 
 // Одна регистрация служит renderer, валидации и экспорту JSON Schema агенту.
-export const a2uiCatalog = new Catalog(
+export const cardsCatalog = new Catalog(
   CATALOG_ID, [ClarificationCard, MetricCard],
 );
+
+// Передаётся в useA2ui({ catalogs: [cards.catalog] }) и getAgentConfiguration(cards).
+export const cards: A2uiCatalogKit = { catalog: cardsCatalog, instructions: CATALOG_INSTRUCTIONS };

@@ -12,6 +12,7 @@ dom.window.matchMedia = () => ({ matches: false, addListener() {}, removeListene
 const { frame, questionMessages, metricMessages, removeQuestion } = await import('./fixtures.js');
 const { render, renderHook, fireEvent, waitFor, act, cleanup } = await import('@testing-library/react');
 const { A2uiView, createA2uiProcessor, useA2ui } = await import('../src/a2ui/index.js');
+const { cards } = await import('../src/a2ui/cards.js');
 const { StrictMode, useState } = await import('react');
 const { AgentChat } = await import('../src/example/AgentChat.js');
 import type { ChatMessage, Send } from '../src/example/request.js';
@@ -19,7 +20,7 @@ after(() => dom.window.close());
 
 test('AntD choices and bindings work in StrictMode; host controls disabled state', async () => {
   const answers: unknown[] = [];
-  const processor = createA2uiProcessor(message => { answers.push(message); });
+  const processor = createA2uiProcessor(message => { answers.push(message); }, [cards.catalog]);
   processor.processMessages(questionMessages());
   const view = render(<StrictMode><A2uiView processor={processor} /></StrictMode>);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
@@ -44,7 +45,7 @@ test('AntD choices and bindings work in StrictMode; host controls disabled state
 
 test('hook handles StrictMode, replacement, latest action callback, clear and unmount', async () => {
   const answers: string[] = []; const text: string[] = [];
-  const hook = renderHook(({ version }) => useA2ui({ onAction: () => { answers.push(version); } }), {
+  const hook = renderHook(({ version }) => useA2ui({ catalogs: [cards.catalog], onAction: () => { answers.push(version); } }), {
     initialProps: { version: 'old' }, wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
   });
   await act(async () => {});
@@ -66,7 +67,7 @@ test('hook handles StrictMode, replacement, latest action callback, clear and un
 });
 
 test('standard component and model updates render zero, negative decimal and multiple surfaces', () => {
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
   const messages = metricMessages();
   if ('updateComponents' in messages[1]) Object.assign(messages[1].updateComponents.components[0], { value: 0, title: 'Заказы' });
   messages.forEach(m => processor.processMessages([m]));
@@ -84,7 +85,7 @@ test('standard component and model updates render zero, negative decimal and mul
 
 
 test('web_core 0.11 renders unknown components as SDK placeholders', () => {
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
   processor.processMessages(metricMessages());
   const view = render(<A2uiView processor={processor} />);
   act(() => processor.processMessages([{ version: 'v0.9', updateComponents: {
@@ -130,7 +131,7 @@ test('card with model-prefilled selected is not locked before the first click', 
   const messages = questionMessages();
   const update = messages[1];
   if ('updateDataModel' in update) update.updateDataModel.value = { selected: 'revenue', disabled: false };
-  const processor = createA2uiProcessor(message => { answers.push(message); });
+  const processor = createA2uiProcessor(message => { answers.push(message); }, [cards.catalog]);
   processor.processMessages(messages);
   const view = render(<A2uiView processor={processor} />);
   assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, false);
@@ -142,7 +143,7 @@ test('card with model-prefilled selected is not locked before the first click', 
 test('onAction failures go to onActionError instead of unhandled rejections', async () => {
   const errors: Error[] = [];
   for (const fail of [() => { throw new Error('sync'); }, async () => { throw new Error('async'); }]) {
-    const hook = renderHook(() => useA2ui({ onAction: fail, onActionError: e => errors.push(e) }));
+    const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction: fail, onActionError: e => errors.push(e) }));
     hook.result.current.processor.processMessages(questionMessages());
     const view = render(<A2uiView processor={hook.result.current.processor} />);
     fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
@@ -153,11 +154,11 @@ test('onAction failures go to onActionError instead of unhandled rejections', as
 });
 
 test('processor survives hide/show of the owning component', async () => {
-  const hook = renderHook(() => useA2ui({ onAction() {} }));
+  const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
   const { processor } = hook.result.current;
   processor.processMessages(questionMessages());
   hook.unmount();
-  const again = renderHook(() => useA2ui({ onAction() {} }));
+  const again = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
   assert.notEqual(again.result.current.processor, processor);
   // Тот же processor остаётся рабочим после cleanup: dispose не вызывается.
   processor.processMessages(metricMessages());
@@ -166,7 +167,7 @@ test('processor survives hide/show of the owning component', async () => {
 });
 
 test('surface count is capped; the excess createSurface is reported, not rendered', async () => {
-  const hook = renderHook(() => useA2ui({ onAction() {} }));
+  const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
   const errors: Error[] = [];
   const response = hook.result.current.beginResponse({ onText() {}, onError: e => errors.push(e) });
   const create = (n: number) => frame([{ version: 'v0.9', createSurface: { surfaceId: `s${n}`, catalogId: 'urn:kxnzee:a2ui:cards:v2' } }]);
@@ -177,7 +178,7 @@ test('surface count is capped; the excess createSurface is reported, not rendere
 });
 
 test('MetricCard formats grouped and fractional numbers without rounding', () => {
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
   const [create, update] = metricMessages();
   processor.processMessages([create, update]);
   const view = render(<A2uiView processor={processor} />);
@@ -190,7 +191,7 @@ test('MetricCard formats grouped and fractional numbers without rounding', () =>
 });
 
 test('tiny metric values are not displayed as zero', () => {
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
   processor.processMessages([metricMessages()[0], { version: 'v0.9', updateComponents: { surfaceId: 'result', components: [
     { id: 'root', component: 'MetricCard', title: 'Малое', value: 1e-21 },
   ] } }]);

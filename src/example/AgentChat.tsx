@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { A2uiView, useA2ui, type A2uiActionMessage } from '../a2ui/index.js';
+import { cards } from '../a2ui/cards.js';
 import { sendChatRequest, type ChatMessage, type Send } from './request.js';
 
 // Только пример чата. Для переноса нужен лишь каталог src/a2ui.
@@ -10,7 +11,7 @@ export function AgentChat({ send, messages, onMessagesChange, stream = true }: {
   const [error, setError] = useState('');
   const cancelRequest = useRef<(() => void) | undefined>(undefined);
   const requestRef = useRef<(input: string | A2uiActionMessage) => Promise<void>>(async () => {});
-  const a2ui = useA2ui({ onAction: message => requestRef.current(message) });
+  const a2ui = useA2ui({ catalogs: [cards.catalog], onAction: message => requestRef.current(message) });
 
   requestRef.current = input => {
     cancelRequest.current?.();

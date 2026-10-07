@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createA2uiProcessor, type ActionHandler } from './processor.js';
+import { createA2uiProcessor, type A2uiCatalog, type ActionHandler } from './processor.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
 export type A2uiResponseOptions = Pick<StreamOptions, 'onText' | 'onError'>;
@@ -16,7 +16,9 @@ const asError = (cause: unknown) => cause instanceof Error ? cause : new Error('
 const defaultActionError = (error: Error) => console.error(error);
 
 // Только A2UI: нет запроса, состояния чата, истории сообщений или транспорта.
-export function useA2ui({ onAction, onActionError = defaultActionError }: {
+export function useA2ui({ catalogs, onAction, onActionError = defaultActionError }: {
+  // Каталоги компонентов, доступные агенту. Читаются один раз при создании processor.
+  catalogs: readonly A2uiCatalog[];
   onAction: ActionHandler;
   // Ошибка onAction (синхронная или отклонённый промис). Без него — console.error.
   onActionError?: (error: Error) => void;
@@ -35,7 +37,7 @@ export function useA2ui({ onAction, onActionError = defaultActionError }: {
     const report = (cause: unknown) => actionErrorRef.current(asError(cause));
     try { return Promise.resolve(actionRef.current(message)).catch(report); }
     catch (cause) { report(cause); }
-  }));
+  }, catalogs));
 
   const beginResponse = useCallback((options: A2uiResponseOptions): A2uiResponse => {
     if (!mounted.current) throw new Error('A2UI уже отключён');

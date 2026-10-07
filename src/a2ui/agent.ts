@@ -1,13 +1,13 @@
 import { MessageProcessor, Schemas } from '@a2ui/web_core/v0_9';
-import { a2uiCatalog, CATALOG_INSTRUCTIONS } from './catalog.js';
+import type { A2uiCatalogKit } from './processor.js';
 
 // web_core 0.11 экспортирует каталог через client capabilities.
-export function getAgentConfiguration() {
-  const processor = new MessageProcessor([a2uiCatalog]);
+export function getAgentConfiguration({ catalog, instructions }: A2uiCatalogKit) {
+  const processor = new MessageProcessor([catalog]);
   try {
     const capabilities = processor.getClientCapabilities({ version: 'v0.9', includeInlineCatalogs: true });
     const catalogSchema = capabilities['v0.9']!.inlineCatalogs![0];
-    for (const [name, component] of a2uiCatalog.components) {
+    for (const [name, component] of catalog.components) {
       // Описания SDK не переносит в inline-каталог, добавляем вручную.
       const target = catalogSchema?.components?.[name];
       if (!target) throw new Error(`Формат inline-каталога SDK изменился: нет компонента ${name}`);
@@ -23,7 +23,7 @@ export function getAgentConfiguration() {
 Компонент выбирается полем component в updateComponents. Свойства компонента находятся рядом с id и component, без props или type.
 Сначала createSurface, затем данные и компоненты. Для новой поверхности новый surfaceId; для существующей — updateComponents/updateDataModel. Не повторяй createSurface для существующего ID.
 Транспорт этого чата текстовый: помещай каждое полное JSON-сообщение в отдельный блок <a2ui>JSON</a2ui>. Обычный текст пиши вне блоков. Теги не являются частью протокола A2UI.
-${CATALOG_INSTRUCTIONS}`,
+${instructions}`,
     });
   } finally {
     processor.model.dispose();

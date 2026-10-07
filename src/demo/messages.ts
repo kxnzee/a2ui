@@ -1,5 +1,5 @@
 import type { A2uiMessage } from '@a2ui/web_core/v0_9';
-import { CATALOG_ID } from '../a2ui/catalog.js';
+import { CATALOG_ID } from '../a2ui/cards.js';
 
 // Примеры стандартных сообщений для prompt и эмулятора. Не новый wire-контракт.
 const examples: Record<'clarification' | 'metric', A2uiMessage[]> = {
