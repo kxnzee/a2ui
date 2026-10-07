@@ -82,3 +82,126 @@ test('a throwing error callback is invoked once and valid frames still follow re
   recovery.push(`<a2ui>{</a2ui>${frame(metrics)}`); recovery.finish();
   assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
 });
+
+test('oversized block is dropped, text and following blocks survive', () => {
+  for (const split of [10, 20000, 33000]) {
+    const source = `До<a2ui>${'x'.repeat(33000)}</a2ui>После${frame(metrics)}`;
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(source.slice(0, split)); s.push(source.slice(split)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+});
+
+test('markdown code fence around block JSON is tolerated', () => {
+  for (const fence of ['```json\n', '```\n', '```JSON ']) {
+    const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText() {}, onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(`<a2ui>\n${fence}${JSON.stringify(metrics[0])}\n\`\`\`\n</a2ui>`); s.finish();
+    assert.deepEqual(messages, [metrics[0]]); assert.equal(errors.length, 0);
+  }
+});
+
+test('closing tag inside a JSON string does not end the block', () => {
+  const tricky = structuredClone(metrics[1]) as Record<string, any>;
+  tricky.updateComponents.components[0].title = 'a </a2ui> "b\\" </a2ui> c';
+  const source = `До${frame([tricky as never])}После`;
+  for (let split = 0; split <= source.length; split++) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(source.slice(0, split)); s.push(source.slice(split)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, [tricky]); assert.equal(errors.length, 0);
+  }
+});
+
+test('unterminated string in a corrupt block does not swallow later text and blocks', () => {
+  const source = `До<a2ui>{"value":"bad</a2ui>После${frame(metrics)}`;
+  for (const split of [0, 15, 30, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(source.slice(0, split)); s.push(source.slice(split)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+  // Последний блок битый, после него только текст: восстанавливаем при finish.
+  const texts: string[] = []; const errors: Error[] = [];
+  const s = createA2uiStream({ onText: t => texts.push(t), onMessage() {}, onError: e => errors.push(e) });
+  s.push('<a2ui>{"value":"bad</a2ui>После'); s.finish();
+  assert.equal(texts.join(''), 'После'); assert.equal(errors.length, 1);
+});
+
+test('skipping an oversized block respects JSON strings and chunk boundaries', () => {
+  const big = `{"v":"${'x'.repeat(33000)}</a2ui> \\" </a2ui> y"}`;
+  const source = `До<a2ui>${big}</a2ui>После${frame(metrics)}`;
+  for (const size of [1, 7, 1000, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    for (let i = 0; i < source.length; i += size) s.push(source.slice(i, i + size));
+    s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+});
+
+test('valid string with closing and opening tags gives the same result for any chunking', () => {
+  const tricky = structuredClone(metrics[1]) as Record<string, any>;
+  tricky.updateComponents.components[0].title = 'Теги </a2ui> и <a2ui> в строке';
+  const source = `До${frame([tricky as never])}После`;
+  for (const size of [1, 3, 11, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    for (let i = 0; i < source.length; i += size) s.push(source.slice(i, i + size));
+    s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, [tricky]); assert.equal(errors.length, 0);
+  }
+});
+
+test('cancel from onError during finish stops further output', () => {
+  const texts: string[] = []; const messages: unknown[] = [];
+  const s = createA2uiStream({
+    onText: t => texts.push(t), onMessage: m => messages.push(m),
+    onError: () => s.cancel(),
+  });
+  s.push('<a2ui>{"value":"bad</a2ui>После'); s.finish();
+  assert.deepEqual(texts, []); assert.deepEqual(messages, []);
+});
+
+test('oversized block with an unterminated string does not swallow the rest of the response', () => {
+  const source = `До<a2ui>{"v":"${'x'.repeat(33000)}</a2ui>После${frame(metrics)}`;
+  for (const size of [1, 3, 1000, 7777, source.length]) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    for (let i = 0; i < source.length; i += size) s.push(source.slice(i, i + size));
+    s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+});
+
+test('custom framing and block limit are honoured', () => {
+  const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+  const s = createA2uiStream({
+    framing: { open: '[[ui]]', close: '[[/ui]]' }, maxBlockLength: 300,
+    onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e),
+  });
+  const json = JSON.stringify(metrics[0]);
+  s.push(`А[[ui]]${json}[[/ui]]Б<a2ui>не блок</a2ui>[[ui]]${'x'.repeat(400)}[[/ui]]В`); s.finish();
+  assert.equal(texts.join(''), 'АБ<a2ui>не блок</a2ui>В');
+  assert.deepEqual(messages, [metrics[0]]); assert.equal(errors.length, 1);
+});
+
+test('errors carry stable codes', () => {
+  const codes: string[] = [];
+  const s = createA2uiStream({ maxBlockLength: 300, onText() {}, onMessage() { throw new Error('boom'); }, onError: e => codes.push(e.code) });
+  s.push(`<a2ui>{</a2ui>${frame([metrics[0]])}<a2ui>${'x'.repeat(400)}</a2ui><a2ui>{`); s.finish();
+  assert.throws(() => s.push('x'), (e: any) => e.code === 'stream-ended');
+  assert.deepEqual(codes, ['invalid-block', 'message-rejected', 'block-too-large', 'unterminated-block']);
+});
+
+test('corrupt oversized block recovers when the closing tag is split at every position', () => {
+  const head = `До<a2ui>{"v":"${'x'.repeat(33000)}`;
+  const tail = `</a2ui>После${frame(metrics)}`;
+  for (let cut = 0; cut <= '</a2ui>'.length; cut++) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(head + tail.slice(0, cut)); s.push(tail.slice(cut)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
+});

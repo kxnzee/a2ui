@@ -30,6 +30,7 @@ test('offline agent export removes stale files and resolves all schema reference
     const inline = documents.get(new URL('catalogSchema.json', base).href);
     assert.deepEqual(catalog.components, inline.components);
     assert.equal(catalog.catalogId, inline.catalogId);
+    for (const [name, component] of Object.entries(inline.components)) assert.ok(component.description, `${name}: нет description`);
     assert.deepEqual(catalog.$defs.anyComponent.oneOf, [
       { $ref: '#/components/ClarificationCard' }, { $ref: '#/components/MetricCard' },
     ]);

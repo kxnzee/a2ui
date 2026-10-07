@@ -1,12 +1,15 @@
-# Переносимый модуль A2UI · 0.5.0
+# Переносимый модуль A2UI · 0.6.0
 
 Протокол: A2UI v0.9. Каталог: `urn:kxnzee:a2ui:cards:v2`.
+
+**Перед копированием добавьте в свой package.json alias `zod-a2ui` и `overrides` для `@a2ui/web_core` ([docs/integration.md](../../docs/integration.md#зависимости-в-приложении)): без них catalog.tsx не соберётся, а SDK получит две копии ядра.**
 
 Копируйте весь `src/a2ui` в своё React-приложение. Основные зависимости: `@a2ui/react` 0.9.1, `@a2ui/web_core` 0.11.0, Zod 4.6.5, AntD 5.22.5, React/ReactDOM 18.2 или 19. Каталог A2UI использует отдельный alias `zod-a2ui` → Zod 3.25.76, необходимый для API этих версий SDK.
 
 | Файл | Назначение |
 | --- | --- |
-| catalog.tsx | Схемы и AntD-компоненты через createComponentImplementation, регистрация Catalog |
+| cards.tsx | Необязательный пример каталога: ClarificationCard и MetricCard на AntD, `cards` (каталог + инструкции), reopenClarification |
+| errors.ts | A2uiError и стабильные коды ошибок |
 | processor.ts | Создание стандартного MessageProcessor с каталогом и callback действия |
 | A2uiView.tsx | Подписки onSurfaceCreated/onSurfaceDeleted и рендер A2uiSurface |
 | useA2ui.ts | Lifecycle processor и подключение текстового декодера |
@@ -20,8 +23,10 @@
 
 ```tsx
 import { useA2ui, A2uiView } from './features/a2ui';
+import { cards } from './features/a2ui/cards'; // или ваш каталог, см. ниже
 
 const a2ui = useA2ui({
+  catalogs: [cards.catalog], // любые каталоги; массив держите стабильным (константа модуля)
   onAction: message => existingSendToAgent(message),
 });
 // Вызывайте при начале ответа агента, а не во время рендера.
@@ -42,13 +47,13 @@ function beginAgentReply() {
 
 Если транспорт отдаёт JSON A2UI отдельно, передавайте его прямо в SDK: `a2ui.processor.processMessages(messages)`. Декодер тогда не нужен. В web_core 0.11 processMessages принимает массив сообщений протокола: для одного объекта передайте [message]; массив истории чата `{role, content}` ему не передаётся.
 
-Хук не отправляет запрос, не хранит историю и не управляет статусом отправки. onAction получает стандартное `{version, action}` с context, разрешённым SDK. Ошибки запроса, loading, повтор и серверную идемпотентность обрабатывает ваш чат. Для блокировки вариантов приложение может обновить необязательный disabled через updateDataModel; пример есть в src/demo/main.tsx. Компонент не меняет disabled самостоятельно.
+Хук не отправляет запрос, не хранит историю и не управляет статусом отправки. По умолчанию одновременно допускается не более 10 поверхностей (параметр maxSurfaces, Infinity отключает предел): лишний createSurface отклоняется с ошибкой в onError. Параметры framing и maxBlockLength задают теги блока и предельную длину блока. Ошибка onAction (в том числе отклонённый промис) передаётся в необязательный onActionError, по умолчанию — console.error. onAction получает стандартное `{version, action}` с context, разрешённым SDK. Ошибки запроса, loading, повтор и серверную идемпотентность обрабатывает ваш чат. Для блокировки вариантов приложение может обновить необязательный disabled через updateDataModel; пример есть в src/demo/main.tsx. Карточка сама блокируется после клика; чтобы разрешить повторный выбор (например, после ошибки отправки), вызовите reopenClarification(processor, surfaceId) из cards.tsx (см. src/example/AgentChat.tsx). Необязательный disabled блокирует варианты принудительно. В историю чата попадает ответ целиком, включая блоки `<a2ui>`, а действие карточки уходит как user-сообщение с JSON.
 
 beginResponse отменяет предыдущий декодер; поздние дельты игнорируются. clear отменяет декодер и удаляет поверхности стандартными deleteSurface, но не отменяет HTTP. При unmount processor освобождается; cleanup совместим с React StrictMode. Для смены диалога используйте компонент с key={conversationId}.
 
 ## Компоненты и агент
 
-ClarificationCard: question, options, selected, onSelect, необязательный disabled. selected — writable binding к абсолютному пути data model. При клике React вызывает setSelected(option.id), затем onSelect(). SDK подставляет выбор в context действия. questionId находится в context события, отдельного дублирующего свойства карточки нет. MetricCard: title, числовой value, необязательный unit.
+ClarificationCard: question, options, selected, onSelect, необязательный disabled. selected — writable binding к абсолютному пути data model. При клике React вызывает setSelected(option.id), затем onSelect(). SDK подставляет выбор в context действия. Вопрос определяют surfaceId и sourceComponentId стандартного action; в context передаётся только optionId. MetricCard: title, числовой value, необязательный unit.
 
 getAgentConfiguration возвращает catalogSchema, protocolSchema, capabilities и instructions. Передайте их существующей интеграции модели. Реестр React сам не меняет prompt. Добавляя компонент, определите Zod-схему с description, реализацию createComponentImplementation и включите её в Catalog. Затем повторите export:agent.
 
@@ -58,11 +63,39 @@ JSON Schema не сериализует все Zod refinements (например
 
 ## Транспорт и валидация
 
+JSON внутри блока может быть обёрнут в markdown-ограду (```` ```json ````): декодер снимает её перед разбором.
+
 В каждом `<a2ui>JSON</a2ui>` — одно стандартное сообщение v0.9: createSurface, updateComponents, updateDataModel или deleteSurface. Теги являются выбранным обрамлением текста, не частью спецификации A2UI. Сетевой адаптер декодирует UTF-8/SSE/JSON и передаёт только текстовые дельты. Сохраняйте исходный assistant.content с блоками в истории; видимый текст берите из onText.
 
 Декодер проверяет конверт схемой A2uiMessageSchema SDK, processor проверяет свойства зарегистрированных компонентов. В web_core 0.11 нет STRICT_VALIDATION. Для JSON-ответов вне декодера проверяйте массив через A2uiMessageListSchema.parse перед processMessages. Неизвестный тип компонента SDK отображает как Unknown component, а не отклоняет на входе. Последовательность не атомарна: ошибка не откатывает ранее принятые сообщения. Поверхности и data bindings обновляет SDK; renderer подписывается на них сам.
 
-Ошибки JSON/конверта и ошибки обработки сообщения SDK передаются в onError отдельно; исходная ошибка доступна в error.cause. Без onError декодер выбрасывает ошибку — обработайте её в своём запросе. После ошибки отдельного блока обработка следующих блоков продолжается, если callback не отменил response. Незавершённый блок обнаруживается в finish. Блок длиннее 32 768 символов останавливает декодер до конца текущего ответа. cancel/clear из callback останавливает также остаток текущего чанка.
+Ошибки JSON/конверта и ошибки обработки сообщения SDK передаются в onError отдельно; исходная ошибка доступна в error.cause. Без onError декодер выбрасывает ошибку — обработайте её в своём запросе. После ошибки отдельного блока обработка следующих блоков продолжается, если callback не отменил response. Незавершённый блок обнаруживается в finish. Блок длиннее maxBlockLength (по умолчанию 32 768 символов) отбрасывается целиком с ошибкой в onError, разбор ответа продолжается. cancel/clear из callback останавливает также остаток текущего чанка.
+
+## Свой каталог (любой функционал)
+
+Универсальный слой (`index.ts`: processor, хук, декодер, view, агентская конфигурация) не зависит от AntD и от конкретных компонентов. Каталог — параметр:
+
+```tsx
+import { Catalog } from '@a2ui/web_core/v0_9';
+import { createComponentImplementation } from '@a2ui/react/v0_9';
+import { z } from 'zod-a2ui'; // alias на Zod 3, см. зависимости
+
+const Badge = createComponentImplementation(
+  { name: 'Badge', schema: z.object({ text: z.string() }).strict().describe('Бейдж с текстом.') },
+  ({ props }) => <span>{props.text}</span>,
+);
+const badges = { catalog: new Catalog('urn:acme:badges:v1', [Badge]), instructions: 'Используй Badge для коротких меток.' };
+
+useA2ui({ catalogs: [badges.catalog], onAction });
+getAgentConfiguration(badges);                       // схемы и промпт для модели
+getAgentConfiguration(badges, { framing, protocolInstructions }); // свои теги и текст промпта
+```
+
+Ошибки — `A2uiError` с полем `code` (`block-too-large`, `invalid-block`, `message-rejected`, `unterminated-block`, `stream-ended`, `too-many-surfaces`, `action-failed`, `disposed`): текст для пользователя выбирает приложение. Для транспорта без текстового обрамления используйте `processor.processMessages` напрямую. `clear(surfaceIds?)` удаляет все поверхности processor либо только указанные.
+
+## Изменение API в 0.6
+
+`createA2uiProcessor(onAction, catalogs)` и `useA2ui({catalogs, ...})` требуют каталоги; `getAgentConfiguration(kit, options?)` принимает `{catalog, instructions}`. Встроенные карточки вынесены из `index.ts` в `cards.tsx` (`./cards` в npm-пакете): `a2uiCatalog` → `cards.catalog`, `CATALOG_INSTRUCTIONS` → `cards.instructions`. `reopen` убран из хука: используйте `reopenClarification(processor, surfaceId)`. Новые параметры: `framing`, `maxBlockLength`, `maxSurfaces`, `onActionError`.
 
 ## Изменение API в 0.5
 
@@ -79,7 +112,7 @@ processor.model.surfacesMap;
 processor.model.dispose();
 ```
 
-Конфигурация экспортируется через getClientCapabilities({version: 'v0.9', includeInlineCatalogs: true}). SDK генерирует inline-каталог; getAgentConfiguration возвращает его отдельно как catalogSchema и сохраняет description исходных схем. CATALOG_INSTRUCTIONS остаётся рядом с регистрацией в catalog.tsx: эта версия Catalog не имеет свойства instructions. Для переноса используйте зависимости и override из docs/integration.md; alias zod-a2ui и override ядра нужны также в вашем приложении.
+Конфигурация экспортируется через getClientCapabilities({version: 'v0.9', includeInlineCatalogs: true}). SDK генерирует inline-каталог; getAgentConfiguration возвращает его отдельно как catalogSchema и сохраняет description исходных схем. Инструкции модели хранятся рядом с каталогом в паре `{catalog, instructions}` (A2uiCatalogKit): эта версия Catalog не имеет свойства instructions. Для переноса используйте зависимости и override из docs/integration.md; alias zod-a2ui и override ядра нужны также в вашем приложении.
 
 
 ## package.json приложения при переносе исходников

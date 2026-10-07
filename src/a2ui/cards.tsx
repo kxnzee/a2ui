@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Button, Card, Statistic, Space } from 'antd';
 import { z } from 'zod-a2ui';
 import { Catalog, CommonSchemas } from '@a2ui/web_core/v0_9';
 import { createComponentImplementation } from '@a2ui/react/v0_9';
+import { PROTOCOL_VERSION, type A2uiCatalogKit, type A2uiProcessor } from './processor.js';
 
 const OptionSchema = z.object({
   id: z.string().min(1).max(100),
@@ -37,7 +39,14 @@ export const ClarificationApi = {
   }).strict().describe('Уточнение с 2–6 вариантами. selected привяжи к data model. При выборе вызывается onSelect; context действия может ссылаться на selected.'),
 };
 
-const ClarificationCard = createComponentImplementation(ClarificationApi, ({ props }) => (
+const ClarificationCard = createComponentImplementation(ClarificationApi, ({ props }) => {
+  // Блокировка от повторной отправки хранится локально, а не выводится из selected:
+  // модель может сама проставить selected по умолчанию, и тогда карточка была бы
+  // заблокирована до первого клика. Блокировка снимается, когда приложение
+  // сбрасывает selected (updateDataModel) — например, чтобы повторить после ошибки.
+  const [sent, setSent] = useState<string>();
+  const locked = sent !== undefined && props.selected === sent;
+  return (
   <Card title={<span style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{props.question}</span>}>
     <Space direction="vertical" style={{ width: '100%' }}>
       <Space wrap>
@@ -45,9 +54,10 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
           <Button
             key={option.id}
             type={props.selected === option.id ? 'primary' : 'default'}
-            disabled={props.disabled}
+            disabled={props.disabled || locked}
             style={{ height: 'auto', whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: '100%' }}
             onClick={() => {
+              setSent(option.id);
               props.setSelected(option.id);
               props.onSelect();
             }}
@@ -58,32 +68,56 @@ const ClarificationCard = createComponentImplementation(ClarificationApi, ({ pro
       </Space>
     </Space>
   </Card>
-));
+  );
+});
 
 export const MetricApi = {
   name: 'MetricCard',
   schema: z.object({
     title: z.string().trim().min(1).max(160),
-    value: z.number().finite(),
+    value: z.number().finite().safe(), // вне безопасного диапазона JSON-число теряет точность
     unit: z.string().trim().min(1).max(24).optional(),
   }).strict().describe('Одно известное числовое значение с названием и необязательной единицей. Не выдумывай значение; если данных нет, запроси их. Не имеет события выбора.'),
 };
 
+// Локаль берётся из lang страницы (по умолчанию ru-RU). Значащие цифры, а не знаки
+// после запятой: малые значения вроде 1e-21 не должны превращаться в 0.
+const formatNumber = (value: number) => new Intl.NumberFormat(
+  (typeof document === 'undefined' ? '' : document.documentElement.lang) || 'ru-RU', { maximumSignificantDigits: 21 },
+).format(value);
+
 const MetricCard = createComponentImplementation(MetricApi, ({ props }) => (
   <Card>
     <Statistic title={props.title} value={props.value} suffix={props.unit}
-      groupSeparator=" " decimalSeparator="," />
+      formatter={value => formatNumber(Number(value))} />
   </Card>
 ));
 
-export const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
+const CATALOG_INSTRUCTIONS = `Выбирай ClarificationCard, если для продолжения нужен выбор пользователя; MetricCard — для одного известного числового результата. Если данных нет, не выдумывай число.
 ID вариантов должны быть уникальны. selected привяжи к абсолютному пути data model и инициализируй пустой строкой.
-onSelect — event с name="clarification_answer" и context: questionId (ID вопроса), optionId (binding к selected).
-Если чат должен блокировать варианты во время запроса, используй необязательный disabled, например binding к /disabled. Статус отправки и ошибки обрабатывает приложение, не A2UI.
+onSelect — event с name="clarification_answer" и context: optionId (binding к selected). Вопрос определяют surfaceId и sourceComponentId из действия.
+После клика карточка блокируется сама. Чтобы разрешить повторный выбор, приложение меняет selected через updateDataModel (например, на пустую строку). Необязательный disabled (например, binding к /disabled) блокирует варианты принудительно. Статус отправки и ошибки обрабатывает приложение, не A2UI.
 Действие клиента приходит как стандартное сообщение {version:"v0.9",action:{name,surfaceId,sourceComponentId,timestamp,context}}. После выбора продолжи задачу.
 Корневой компонент имеет id="root". Можно обновлять существующие поверхности; удаляй завершённую карточку через deleteSurface, если она больше не нужна.`;
 
 // Одна регистрация служит renderer, валидации и экспорту JSON Schema агенту.
-export const a2uiCatalog = new Catalog(
+export const cardsCatalog = new Catalog(
   CATALOG_ID, [ClarificationCard, MetricCard],
 );
+
+// Разрешает повторный выбор в карточках поверхности: сбрасывает привязанный selected
+// стандартным updateDataModel (например, после ошибки отправки). Знание о компоненте
+// живёт здесь, в каталоге, а не в универсальном хуке.
+export function reopenClarification(processor: A2uiProcessor, surfaceId: string) {
+  const surface = processor.model.getSurface(surfaceId);
+  if (!surface) return;
+  for (const [, component] of surface.componentsModel.entries) {
+    const path = component.type === ClarificationApi.name ? component.properties.selected?.path : undefined;
+    if (typeof path === 'string') {
+      processor.processMessages([{ version: PROTOCOL_VERSION, updateDataModel: { surfaceId, path, value: '' } }]);
+    }
+  }
+}
+
+// Передаётся в useA2ui({ catalogs: [cards.catalog] }) и getAgentConfiguration(cards).
+export const cards: A2uiCatalogKit = { catalog: cardsCatalog, instructions: CATALOG_INSTRUCTIONS };

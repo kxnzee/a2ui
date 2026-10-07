@@ -12,6 +12,7 @@ dom.window.matchMedia = () => ({ matches: false, addListener() {}, removeListene
 const { frame, questionMessages, metricMessages, removeQuestion } = await import('./fixtures.js');
 const { render, renderHook, fireEvent, waitFor, act, cleanup } = await import('@testing-library/react');
 const { A2uiView, createA2uiProcessor, useA2ui } = await import('../src/a2ui/index.js');
+const { cards } = await import('../src/a2ui/cards.js');
 const { StrictMode, useState } = await import('react');
 const { AgentChat } = await import('../src/example/AgentChat.js');
 import type { ChatMessage, Send } from '../src/example/request.js';
@@ -19,25 +20,32 @@ after(() => dom.window.close());
 
 test('AntD choices and bindings work in StrictMode; host controls disabled state', async () => {
   const answers: unknown[] = [];
-  const processor = createA2uiProcessor(message => { answers.push(message); });
+  const processor = createA2uiProcessor(message => { answers.push(message); }, [cards.catalog]);
   processor.processMessages(questionMessages());
   const view = render(<StrictMode><A2uiView processor={processor} /></StrictMode>);
   fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
   await waitFor(() => assert.equal(answers.length, 1));
+  // После выбора карточка блокируется сама, повторный клик не шлёт второй action.
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
+  fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
+  assert.equal(answers.length, 1);
+  // Приложение разрешает повторный выбор, сбросив selected стандартным сообщением.
+  act(() => processor.processMessages([{ version: 'v0.9', updateDataModel: {
+    surfaceId: 'question', path: '/selected', value: '',
+  } }]));
   assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, false);
-  assert.equal(view.queryByText('Вы выбрали: Выручка'), null);
   act(() => processor.processMessages([{ version: 'v0.9', updateDataModel: {
     surfaceId: 'question', path: '/disabled', value: true,
   } }]));
   assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
-  act(() => { processor.processMessages([removeQuestion]); processor.processMessages(questionMessages('next')); });
+  act(() => { processor.processMessages([removeQuestion]); processor.processMessages(questionMessages()); });
   assert.equal((view.getByRole('button', { name: 'Количество заказов' }) as HTMLButtonElement).disabled, false);
   cleanup(); processor.model.dispose();
 });
 
 test('hook handles StrictMode, replacement, latest action callback, clear and unmount', async () => {
   const answers: string[] = []; const text: string[] = [];
-  const hook = renderHook(({ version }) => useA2ui({ onAction: () => { answers.push(version); } }), {
+  const hook = renderHook(({ version }) => useA2ui({ catalogs: [cards.catalog], onAction: () => { answers.push(version); } }), {
     initialProps: { version: 'old' }, wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
   });
   await act(async () => {});
@@ -59,7 +67,7 @@ test('hook handles StrictMode, replacement, latest action callback, clear and un
 });
 
 test('standard component and model updates render zero, negative decimal and multiple surfaces', () => {
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
   const messages = metricMessages();
   if ('updateComponents' in messages[1]) Object.assign(messages[1].updateComponents.components[0], { value: 0, title: 'Заказы' });
   messages.forEach(m => processor.processMessages([m]));
@@ -77,7 +85,7 @@ test('standard component and model updates render zero, negative decimal and mul
 
 
 test('web_core 0.11 renders unknown components as SDK placeholders', () => {
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
   processor.processMessages(metricMessages());
   const view = render(<A2uiView processor={processor} />);
   act(() => processor.processMessages([{ version: 'v0.9', updateComponents: {
@@ -113,7 +121,116 @@ for (const stream of [true, false]) test(`example chat sends native card actions
   assert.equal(bodies[1].messages[1].content, content);
   const action = JSON.parse(bodies[1].messages[2].content);
   assert.equal(action.version, 'v0.9');
-  assert.deepEqual(action.action.context, { questionId: 'metric-1', optionId: 'orders' });
+  assert.deepEqual(action.action.context, { optionId: 'orders' });
   cleanup();
   await act(async () => {});
+});
+
+test('card with model-prefilled selected is not locked before the first click', async () => {
+  const answers: unknown[] = [];
+  const messages = questionMessages();
+  const update = messages[1];
+  if ('updateDataModel' in update) update.updateDataModel.value = { selected: 'revenue', disabled: false };
+  const processor = createA2uiProcessor(message => { answers.push(message); }, [cards.catalog]);
+  processor.processMessages(messages);
+  const view = render(<A2uiView processor={processor} />);
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, false);
+  fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
+  assert.equal((view.getByRole('button', { name: 'Выручка' }) as HTMLButtonElement).disabled, true);
+  cleanup(); processor.model.dispose();
+});
+
+test('onAction failures go to onActionError instead of unhandled rejections', async () => {
+  const errors: Error[] = [];
+  for (const fail of [() => { throw new Error('sync'); }, async () => { throw new Error('async'); }]) {
+    const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction: fail, onActionError: e => errors.push(e) }));
+    hook.result.current.processor.processMessages(questionMessages());
+    const view = render(<A2uiView processor={hook.result.current.processor} />);
+    fireEvent.click(view.getByRole('button', { name: 'Выручка' }));
+    await waitFor(() => assert.equal(errors.length, fail.constructor.name === 'AsyncFunction' ? 2 : 1));
+    cleanup();
+  }
+  assert.deepEqual(errors.map(e => e.message), ['sync', 'async']);
+});
+
+test('processor survives hide/show of the owning component', async () => {
+  const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
+  const { processor } = hook.result.current;
+  processor.processMessages(questionMessages());
+  hook.unmount();
+  const again = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
+  assert.notEqual(again.result.current.processor, processor);
+  // Тот же processor остаётся рабочим после cleanup: dispose не вызывается.
+  processor.processMessages(metricMessages());
+  assert.equal(processor.model.surfacesMap.size, 2);
+  cleanup();
+});
+
+test('surface count is capped; the excess createSurface is reported, not rendered', async () => {
+  const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {} }));
+  const errors: Error[] = [];
+  const response = hook.result.current.beginResponse({ onText() {}, onError: e => errors.push(e) });
+  const create = (n: number) => frame([{ version: 'v0.9', createSurface: { surfaceId: `s${n}`, catalogId: 'urn:kxnzee:a2ui:cards:v2' } }]);
+  act(() => { for (let n = 0; n < 12; n++) response.push(create(n)); response.finish(); });
+  assert.equal(hook.result.current.processor.model.surfacesMap.size, 10);
+  assert.equal(errors.length, 2);
+  cleanup();
+});
+
+test('MetricCard formats grouped and fractional numbers without rounding', () => {
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
+  const [create, update] = metricMessages();
+  processor.processMessages([create, update]);
+  const view = render(<A2uiView processor={processor} />);
+  assert.match(view.container.textContent!, /1\s250\s000/);
+  act(() => processor.processMessages([{ version: 'v0.9', updateComponents: { surfaceId: 'result', components: [
+    { id: 'root', component: 'MetricCard', title: 'Доля', value: 0.125 },
+  ] } }]));
+  assert.match(view.container.textContent!, /0,125/);
+  cleanup(); processor.model.dispose();
+});
+
+test('tiny metric values are not displayed as zero', () => {
+  const processor = createA2uiProcessor(() => {}, [cards.catalog]);
+  processor.processMessages([metricMessages()[0], { version: 'v0.9', updateComponents: { surfaceId: 'result', components: [
+    { id: 'root', component: 'MetricCard', title: 'Малое', value: 1e-21 },
+  ] } }]);
+  const view = render(<A2uiView processor={processor} />);
+  assert.doesNotMatch(view.container.textContent!, /Малое\s*0(?![,.\d])/);
+  assert.match(view.container.textContent!, /0,0{20}1/);
+  cleanup(); processor.model.dispose();
+});
+
+test('reopen lets the user retry after a send error in AgentChat', async () => {
+  const content = `Уточнение:${frame(questionMessages())}`;
+  let calls = 0;
+  const send: Send = (_body, callbacks) => {
+    calls++;
+    if (calls === 1) { callbacks.onTextDelta(content); callbacks.onDone(); return { accepted: Promise.resolve(), cancel() {} }; }
+    return { accepted: Promise.reject(new Error('Сеть недоступна')), cancel() {} };
+  };
+  function Chat() {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    return <AgentChat send={send} messages={messages} onMessagesChange={setMessages} />;
+  }
+  const view = render(<Chat />);
+  fireEvent.click(view.getByRole('button', { name: 'Запросить график' }));
+  fireEvent.click(view.getByRole('button', { name: 'Количество заказов' }));
+  await waitFor(() => view.getByRole('alert'));
+  await waitFor(() => assert.equal((view.getByRole('button', { name: 'Количество заказов' }) as HTMLButtonElement).disabled, false));
+  fireEvent.click(view.getByRole('button', { name: 'Количество заказов' }));
+  await waitFor(() => assert.equal(calls, 3));
+  cleanup();
+  await act(async () => {});
+});
+
+test('maxSurfaces option replaces the default cap', () => {
+  const hook = renderHook(() => useA2ui({ catalogs: [cards.catalog], onAction() {}, maxSurfaces: 2 }));
+  const errors: Error[] = [];
+  const response = hook.result.current.beginResponse({ onText() {}, onError: e => errors.push(e) });
+  const create = (n: number) => frame([{ version: 'v0.9', createSurface: { surfaceId: `s${n}`, catalogId: cards.catalog.id } }]);
+  act(() => { for (let n = 0; n < 4; n++) response.push(create(n)); response.finish(); });
+  assert.equal(hook.result.current.processor.model.surfacesMap.size, 2);
+  assert.equal(errors.length, 2);
+  cleanup();
 });

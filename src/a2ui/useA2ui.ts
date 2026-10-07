@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { createA2uiProcessor, type ActionHandler } from './processor.js';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createA2uiProcessor, PROTOCOL_VERSION, type A2uiCatalog, type ActionHandler } from './processor.js';
+import { A2uiError } from './errors.js';
 import { createA2uiStream, type StreamOptions } from './stream.js';
 
 export type A2uiResponseOptions = Pick<StreamOptions, 'onText' | 'onError'>;
@@ -9,25 +10,63 @@ export type A2uiResponse = {
   cancel: () => void;
 };
 
+// Предел одновременных поверхностей по умолчанию: блок ограничен по размеру, а их число — нет.
+const DEFAULT_MAX_SURFACES = 10;
+
+const asError = (cause: unknown) => cause instanceof A2uiError ? cause : new A2uiError(
+  'action-failed', cause instanceof Error ? cause.message : 'Ошибка обработчика действия A2UI', { cause });
+const defaultActionError = (error: A2uiError) => console.error(error);
+
 // Только A2UI: нет запроса, состояния чата, истории сообщений или транспорта.
-export function useA2ui({ onAction }: { onAction: ActionHandler }) {
+export function useA2ui({
+  catalogs, onAction, onActionError = defaultActionError,
+  framing, maxBlockLength, maxSurfaces = DEFAULT_MAX_SURFACES,
+}: {
+  // Каталоги компонентов, доступные агенту. Читаются один раз при создании processor.
+  catalogs: readonly A2uiCatalog[];
+  onAction: ActionHandler;
+  // Ошибка onAction (синхронная или отклонённый промис). Без него — console.error.
+  onActionError?: (error: A2uiError) => void;
+  // Параметры текстового декодера (см. StreamOptions); значения читаются на каждый ответ.
+  framing?: StreamOptions['framing'];
+  maxBlockLength?: number;
+  // Предел одновременных поверхностей; Infinity отключает ограничение.
+  maxSurfaces?: number;
+}) {
   const actionRef = useRef(onAction);
-  actionRef.current = onAction;
+  const actionErrorRef = useRef(onActionError);
+  const framingRef = useRef(framing);
+  const maxBlockRef = useRef(maxBlockLength);
+  const maxSurfacesRef = useRef(maxSurfaces);
+  useLayoutEffect(() => {
+    actionRef.current = onAction; actionErrorRef.current = onActionError;
+    framingRef.current = framing; maxBlockRef.current = maxBlockLength; maxSurfacesRef.current = maxSurfaces;
+  });
   const mounted = useRef(true);
   const active = useRef<A2uiResponse | undefined>(undefined);
-  const processor = useMemo(
-    () => createA2uiProcessor(message => {
-      if (mounted.current) return actionRef.current(message);
-    }), [],
-  );
+  // useState, а не useMemo: React вправе выбросить мемоизированное значение,
+  // и тогда processor с поверхностями пересоздался бы посреди работы.
+  const [processor] = useState(() => createA2uiProcessor(message => {
+    if (!mounted.current) return;
+    // SDK не обрабатывает результат обработчика: отклонённый промис стал бы
+    // unhandledrejection, поэтому перехватываем его сами.
+    const report = (cause: unknown) => actionErrorRef.current(asError(cause));
+    try { return Promise.resolve(actionRef.current(message)).catch(report); }
+    catch (cause) { report(cause); }
+  }, catalogs));
 
   const beginResponse = useCallback((options: A2uiResponseOptions): A2uiResponse => {
-    if (!mounted.current) throw new Error('A2UI уже отключён');
+    if (!mounted.current) throw new A2uiError('disposed', 'A2UI уже отключён');
     active.current?.cancel();
     let ended = false;
     const decoder = createA2uiStream({
-      ...options,
-      onMessage: message => processor.processMessages([message]),
+      ...options, framing: framingRef.current, maxBlockLength: maxBlockRef.current,
+      onMessage: message => {
+        if ('createSurface' in message && processor.model.surfacesMap.size >= maxSurfacesRef.current) {
+          throw new A2uiError('too-many-surfaces', `Слишком много поверхностей A2UI (максимум ${maxSurfacesRef.current})`);
+        }
+        processor.processMessages([message]);
+      },
     });
     const response: A2uiResponse = {
       push(delta) { if (!ended) decoder.push(delta); },
@@ -47,10 +86,11 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
     return response;
   }, [processor]);
 
-  const clear = useCallback(() => {
+  // Без аргумента удаляет все поверхности processor; с surfaceIds — только указанные.
+  const clear = useCallback((surfaceIds?: readonly string[]) => {
     active.current?.cancel();
-    for (const surfaceId of processor.model.surfacesMap.keys()) {
-      processor.processMessages([{ version: 'v0.9', deleteSurface: { surfaceId } }]);
+    for (const surfaceId of surfaceIds ?? [...processor.model.surfacesMap.keys()]) {
+      processor.processMessages([{ version: PROTOCOL_VERSION, deleteSurface: { surfaceId } }]);
     }
   }, [processor]);
 
@@ -59,9 +99,9 @@ export function useA2ui({ onAction }: { onAction: ActionHandler }) {
     return () => {
       mounted.current = false;
       active.current?.cancel();
-      // StrictMode повторяет setup/cleanup эффекта. Закрываем processor
-      // только если за cleanup не последовал повторный setup.
-      queueMicrotask(() => { if (!mounted.current) processor.model.dispose(); });
+      // processor намеренно не dispose: cleanup вызывают и StrictMode, и повторный
+      // показ поддерева (например, Activity), а после dispose processor неработоспособен.
+      // Отписываться нечего: processor никем не удерживается и будет собран GC.
     };
   }, [processor]);
 

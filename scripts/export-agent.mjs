@@ -1,7 +1,8 @@
 import { mkdir, writeFile, readdir, copyFile, rm } from 'node:fs/promises';
 import { getAgentConfiguration } from '../src/a2ui/agent.ts';
+import { cards } from '../src/a2ui/cards.tsx';
 import { getDemoMessages } from '../src/demo/messages.ts';
-const config = { ...getAgentConfiguration(), examples: getDemoMessages() };
+const config = { ...getAgentConfiguration(cards), examples: getDemoMessages() };
 // В схемах протокола catalog.json — стандартная точка подключения каталога.
 // Inline-каталог SDK не содержит $defs, поэтому создаём схему для этих ссылок.
 const functions = Object.fromEntries((config.catalogSchema.functions ?? []).map(fn => [fn.name, {

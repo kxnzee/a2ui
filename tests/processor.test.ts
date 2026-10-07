@@ -2,7 +2,7 @@ import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { NodeResolver, getValue, A2uiClientMessageSchema, A2uiMessageListSchema, MessageProcessor, type WritableBinding } from '@a2ui/web_core/v0_9';
 import { createA2uiProcessor } from '../src/a2ui/processor.js';
-import { a2uiCatalog } from '../src/a2ui/catalog.js';
+import { cards, cardsCatalog as a2uiCatalog } from '../src/a2ui/cards.js';
 import { questionMessages, metricMessages, removeQuestion } from './fixtures.js';
 const resolvers: NodeResolver[] = [];
 afterEach(() => { for (const r of resolvers.splice(0)) r.dispose(); });
@@ -15,7 +15,7 @@ function props(processor: ReturnType<typeof createA2uiProcessor>) {
 
 test('native SDK resolves selected binding into a standard action without changing request state', () => {
   const answers: unknown[] = [];
-  const processor = createA2uiProcessor(message => { answers.push(message); });
+  const processor = createA2uiProcessor(message => { answers.push(message); }, [a2uiCatalog]);
   assert.ok(processor instanceof MessageProcessor);
   processor.processMessages(questionMessages());
   const p = props(processor); p.selected.set('orders'); p.onSelect();
@@ -24,7 +24,7 @@ test('native SDK resolves selected binding into a standard action without changi
   if ('action' in parsed) {
     assert.equal(parsed.action.sourceComponentId, 'root');
     assert.equal(parsed.action.surfaceId, 'question');
-    assert.deepEqual(parsed.action.context, { questionId: 'metric-1', optionId: 'orders' });
+    assert.deepEqual(parsed.action.context, { optionId: 'orders' });
   }
   assert.equal(props(processor).disabled.value, false);
   assert.equal(processor.model.getSurface('question')!.dataModel.get('/answered'), undefined);
@@ -33,7 +33,7 @@ test('native SDK resolves selected binding into a standard action without changi
 
 test('SDK owns surface lifecycle and updates; action names remain application-defined', () => {
   const answers: string[] = []; const created: string[] = []; const deleted: string[] = [];
-  const processor = createA2uiProcessor(message => { answers.push(message.action.name); });
+  const processor = createA2uiProcessor(message => { answers.push(message.action.name); }, [a2uiCatalog]);
   const create = processor.onSurfaceCreated(surface => { created.push(surface.id); });
   const remove = processor.onSurfaceDeleted(id => { deleted.push(id); });
   const messages = questionMessages();
@@ -49,7 +49,7 @@ test('SDK owns surface lifecycle and updates; action names remain application-de
 });
 
 test('SDK validates catalog/properties; protocol schema rejects chat history arrays', () => {
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [a2uiCatalog]);
   assert.throws(() => processor.processMessages([{ version: 'v0.9', createSurface: { surfaceId: 'bad', catalogId: 'unknown' } }]));
   processor.processMessages(metricMessages());
   for (const component of [
@@ -66,7 +66,7 @@ test('SDK validates catalog/properties; protocol schema rejects chat history arr
 
 test('agent configuration comes from the renderer catalog; examples stay outside the UI module', async () => {
   const { getAgentConfiguration } = await import('../src/a2ui/agent.js');
-  const config = getAgentConfiguration();
+  const config = getAgentConfiguration(cards);
   assert.equal(config.catalogSchema.catalogId, a2uiCatalog.id);
   assert.deepEqual(Object.keys(config.catalogSchema.components!).sort(), [...a2uiCatalog.components.keys()].sort());
   const metric = config.catalogSchema.components!.MetricCard.allOf![1];
@@ -81,18 +81,18 @@ test('agent configuration comes from the renderer catalog; examples stay outside
   assert.deepEqual(config.capabilities['v0.9']?.supportedCatalogIds, [a2uiCatalog.id]);
   assert.ok(config.protocolSchema.$defs.CreateSurfaceMessage);
   assert.equal('examples' in config, false);
-  const processor = createA2uiProcessor(() => {});
+  const processor = createA2uiProcessor(() => {}, [a2uiCatalog]);
   processor.processMessages([...questionMessages(), ...metricMessages()]);
   assert.equal(processor.model.surfacesMap.size, 2); processor.model.dispose();
 });
 
 test('exported configuration cannot mutate SDK schemas or subsequent exports', async () => {
   const { getAgentConfiguration } = await import('../src/a2ui/agent.js');
-  const baseline = getAgentConfiguration(); const exported = getAgentConfiguration();
+  const baseline = getAgentConfiguration(cards); const exported = getAgentConfiguration(cards);
   exported.catalogSchema.catalogId = 'mutated';
   exported.protocolSchema.$defs.CreateSurfaceMessage.required.push('mutated');
   exported.capabilities['v0.9']!.supportedCatalogIds = [];
-  assert.deepEqual(getAgentConfiguration(), baseline);
+  assert.deepEqual(getAgentConfiguration(cards), baseline);
   assert.equal(a2uiCatalog.id, baseline.catalogSchema.catalogId);
 });
 
@@ -100,8 +100,37 @@ test('clarification only requires writable selected; disabled is optional', () =
   const messages = questionMessages(); assert.ok('updateComponents' in messages[2]);
   if (!('updateComponents' in messages[2])) return;
   delete messages[2].updateComponents.components[0].disabled;
-  const processor = createA2uiProcessor(() => {}); processor.processMessages(messages);
+  const processor = createA2uiProcessor(() => {}, [a2uiCatalog]); processor.processMessages(messages);
   const card = structuredClone(messages[2].updateComponents.components[0]); card.selected = 'literal';
   assert.throws(() => processor.processMessages([{ version: 'v0.9', updateComponents: { surfaceId: 'question', components: [card] } }]));
+  processor.model.dispose();
+});
+
+test('core works with a custom catalog and does not know the bundled cards', async () => {
+  const { Catalog } = await import('@a2ui/web_core/v0_9');
+  const { createComponentImplementation } = await import('@a2ui/react/v0_9');
+  const { z } = await import('zod-a2ui');
+  const { getAgentConfiguration } = await import('../src/a2ui/agent.js');
+  const Badge = createComponentImplementation(
+    { name: 'Badge', schema: z.object({ text: z.string() }).strict().describe('Бейдж с текстом.') },
+    () => null,
+  );
+  const catalog = new Catalog('urn:test:badge:v1', [Badge]);
+  const processor = createA2uiProcessor(() => {}, [catalog]);
+  processor.processMessages([
+    { version: 'v0.9', createSurface: { surfaceId: 's', catalogId: catalog.id } },
+    { version: 'v0.9', updateComponents: { surfaceId: 's', components: [{ id: 'root', component: 'Badge', text: 'ok' }] } },
+  ]);
+  assert.equal(processor.model.getSurface('s')!.componentsModel.get('root')!.type, 'Badge');
+  // Компонентов из встроенных карточек в чужом каталоге нет.
+  assert.equal(catalog.components.has('MetricCard'), false);
+  const config = getAgentConfiguration({ catalog, instructions: 'Только бейджи.' });
+  assert.deepEqual(Object.keys(config.catalogSchema.components!), ['Badge']);
+  assert.equal(config.catalogSchema.components!.Badge.description, 'Бейдж с текстом.');
+  assert.match(config.instructions, /Только бейджи\./);
+  assert.doesNotMatch(config.instructions, /ClarificationCard/);
+  const custom = getAgentConfiguration({ catalog, instructions: 'x' }, { framing: { open: '[[ui]]', close: '[[/ui]]' } });
+  assert.match(custom.instructions, /\[\[ui\]\]JSON\[\[\/ui\]\]/);
+  assert.equal(getAgentConfiguration({ catalog, instructions: 'x' }, { protocolInstructions: 'Свой текст' }).instructions, 'Свой текст\nx');
   processor.model.dispose();
 });
