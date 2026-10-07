@@ -246,7 +246,7 @@ src/demo и src/example нужны для проверки и знакомств
 
 Добавьте эти записи в корневой package.json, сохранив свои React/ReactDOM и остальные зависимости. npm ci использует lockfile проекта; при первом подключении обновите свой lockfile через npm install. Во внутреннем registry/кэше подготовьте также Zod 3.25.76 — он требуется SDK и alias каталога. Каталог импортирует z из zod-a2ui; основной Zod 4.6.5 остаётся доступен приложению.
 
-В web_core 0.11 нативный processMessages принимает массив: processMessages([message]) для одного сообщения. Поверхности доступны через processor.model.getSurface и processor.model.surfacesMap, cleanup выполняет processor.model.dispose. Схема каталога экспортируется нативным getClientCapabilities, общие инструкции хранятся в CATALOG_INSTRUCTIONS.
+В web_core 0.11 нативный processMessages принимает массив: processMessages([message]) для одного сообщения. Поверхности доступны через processor.model.getSurface и processor.model.surfacesMap, cleanup выполняет processor.model.dispose. Схема каталога экспортируется нативным getClientCapabilities, инструкции модели передаются вместе с каталогом (`{catalog, instructions}`).
 
 
 Если устанавливаете только npm-архив, а web_core не является прямой зависимостью вашего приложения, используйте корневой override с конкретной версией: `"@a2ui/web_core": "0.11.0"`. Запись `$@a2ui/web_core` подходит, когда корневая dependencies уже содержит web_core 0.11.0, как в примере выше. Это исключает вторую копию ядра 0.9.2 внутри React renderer.
