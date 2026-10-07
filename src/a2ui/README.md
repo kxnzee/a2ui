@@ -1,10 +1,10 @@
 # Переносимый модуль A2UI · 0.6.0
 
-Протокол: A2UI v0.9. Каталог: `urn:kxnzee:a2ui:cards:v2`.
+Протокол: A2UI v0.9. Каталог: `urn:a2ui:cards:v1`.
 
-**Перед копированием добавьте в свой package.json alias `zod-a2ui` и `overrides` для `@a2ui/web_core` ([docs/integration.md](../../docs/integration.md#зависимости-в-приложении)): без них catalog.tsx не соберётся, а SDK получит две копии ядра.**
+**Перед копированием добавьте в свой package.json `overrides` для `@a2ui/web_core` и, для описания каталога (в том числе своего), alias `zod-a2ui` ([docs/integration.md](../../docs/integration.md#зависимости-в-приложении)): без override SDK получит две копии ядра, без alias не соберётся схема каталога.**
 
-Копируйте весь `src/a2ui` в своё React-приложение. Основные зависимости: `@a2ui/react` 0.9.1, `@a2ui/web_core` 0.11.0, Zod 4.6.5, AntD 5.22.5, React/ReactDOM 18.2 или 19. Каталог A2UI использует отдельный alias `zod-a2ui` → Zod 3.25.76, необходимый для API этих версий SDK.
+Копируйте весь `src/a2ui` в своё React-приложение. Универсальному слою (всё, кроме `cards.tsx`) нужны `@a2ui/react` 0.9.1, `@a2ui/web_core` 0.11.0 и React/ReactDOM 18.2 или 19; AntD ему не нужен. Схемы каталога (ваши и в `cards.tsx`) пишутся на Zod 3.25.76 через alias `zod-a2ui`, необходимый для API этих версий SDK. AntD 5.22.5 требуется только для `cards.tsx`. Основной Zod 4 модуль не использует.
 
 | Файл | Назначение |
 | --- | --- |
@@ -91,15 +91,20 @@ getAgentConfiguration(badges);                       // схемы и промп
 getAgentConfiguration(badges, { framing, protocolInstructions }); // свои теги и текст промпта
 ```
 
-Ошибки — `A2uiError` с полем `code` (`block-too-large`, `invalid-block`, `message-rejected`, `unterminated-block`, `stream-ended`, `too-many-surfaces`, `action-failed`, `disposed`): текст для пользователя выбирает приложение. Для транспорта без текстового обрамления используйте `processor.processMessages` напрямую. `clear(surfaceIds?)` удаляет все поверхности processor либо только указанные.
+Теги обрамления должны совпадать у агента и фронта, иначе блоки молча станут обычным текстом. Заведите одну константу `const framing = { open: '[[ui]]', close: '[[/ui]]' }` и передайте её и в `useA2ui({ framing })`, и в `getAgentConfiguration(kit, { framing })`; конфигурация также отдаёт её в поле `framing` (в `dist/agent` — `framing.json`).
+
+Ошибки — `A2uiError` с полем `code` (`block-too-large`, `invalid-block`, `message-rejected`, `unterminated-block`, `stream-ended`, `too-many-surfaces`, `unknown-catalog`, `action-failed`, `disposed`): текст для пользователя выбирает приложение. Для транспорта без текстового обрамления используйте `processor.processMessages` напрямую. `clear(surfaceIds?)` удаляет все поверхности processor либо только указанные.
 
 ## Изменение API в 0.6
+
+ID каталога карточек нейтральный и начинается с первой версии: `urn:a2ui:cards:v1` (прежних потребителей нет). Свой каталог называйте `urn:<организация>:<приложение>:<имя>:vN` и поднимайте N при любом ломающем изменении схемы.
+
 
 `createA2uiProcessor(onAction, catalogs)` и `useA2ui({catalogs, ...})` требуют каталоги; `getAgentConfiguration(kit, options?)` принимает `{catalog, instructions}`. Встроенные карточки вынесены из `index.ts` в `cards.tsx` (`./cards` в npm-пакете): `a2uiCatalog` → `cards.catalog`, `CATALOG_INSTRUCTIONS` → `cards.instructions`. `reopen` убран из хука: используйте `reopenClarification(processor, surfaceId)`. Новые параметры: `framing`, `maxBlockLength`, `maxSurfaces`, `onActionError`.
 
 ## Изменение API в 0.5
 
-Собственный A2uiController удалён. Используйте createA2uiProcessor; хук возвращает processor вместо controller. У A2uiView prop называется processor. В web_core 0.11 processMessages принимает массив; один объект передаётся как [message]. Поля questionId, answered и error убраны из ClarificationCard; questionId остаётся в context события, статус отправки принадлежит чату. ID каталога обновлён до urn:kxnzee:a2ui:cards:v2. Сгенерируйте dist/agent заново вместе с обновлением фронта.
+Собственный A2uiController удалён. Используйте createA2uiProcessor; хук возвращает processor вместо controller. У A2uiView prop называется processor. В web_core 0.11 processMessages принимает массив; один объект передаётся как [message]. Поля questionId, answered и error убраны из ClarificationCard; questionId остаётся в context события, статус отправки принадлежит чату. Сгенерируйте dist/agent заново вместе с обновлением фронта.
 
 
 ## SDK 0.11: актуальные обращения
@@ -123,7 +128,6 @@ processor.model.dispose();
     "@a2ui/react": "0.9.1",
     "@a2ui/web_core": "0.11.0",
     "antd": "5.22.5",
-    "zod": "4.6.5",
     "zod-a2ui": "npm:zod@3.25.76"
   },
   "overrides": {
@@ -132,4 +136,4 @@ processor.model.dispose();
 }
 ```
 
-Объедините эти записи со своим корневым package.json и обновите lockfile. Override закрепляет единую копию ядра для renderer и приложения; npm не наследует overrides из зависимого npm-пакета. Во внутреннем registry/кэше понадобятся оба пакета Zod: основной 4.6.5 и Zod 3.25.76 для SDK/alias. Для Ant Design 5 используются Space.direction и Alert.message.
+Объедините эти записи со своим корневым package.json и обновите lockfile. Override закрепляет единую копию ядра для renderer и приложения; npm не наследует overrides из зависимого npm-пакета. Во внутреннем registry/кэше понадобится Zod 3.25.76 для SDK и alias. Для Ant Design 5 используются Space.direction и Alert.message.

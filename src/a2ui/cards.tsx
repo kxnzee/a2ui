@@ -10,7 +10,7 @@ const OptionSchema = z.object({
   label: z.string().trim().min(1).max(160),
 }).strict();
 
-export const CATALOG_ID = 'urn:kxnzee:a2ui:cards:v2';
+export const CATALOG_ID = 'urn:a2ui:cards:v1';
 
 function isWritablePath(value: unknown) {
   return typeof value === 'object' && value !== null &&

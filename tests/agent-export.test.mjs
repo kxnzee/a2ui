@@ -61,3 +61,23 @@ test('offline agent export removes stale files and resolves all schema reference
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('agent export works for a custom kit passed by path', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'a2ui-agent-export-kit-'));
+  try {
+    execFileSync(process.execPath, [
+      '--import', import.meta.resolve('tsx'),
+      fileURLToPath(new URL('../scripts/export-agent.mjs', import.meta.url)),
+      '--kit', fileURLToPath(new URL('./fixtures-kit.tsx', import.meta.url)),
+      '--examples', fileURLToPath(new URL('./fixtures-kit.tsx', import.meta.url)),
+    ], { cwd: directory, stdio: 'pipe' });
+    const output = join(directory, 'dist/agent');
+    const catalog = JSON.parse(await readFile(join(output, 'catalog.json'), 'utf8'));
+    assert.equal(catalog.catalogId, 'urn:acme:badges:v1');
+    assert.deepEqual(Object.keys(catalog.components), ['Badge']);
+    assert.match(await readFile(join(output, 'instructions.txt'), 'utf8'), /Используй Badge\./);
+    assert.deepEqual(JSON.parse(await readFile(join(output, 'framing.json'), 'utf8')), { open: '<a2ui>', close: '</a2ui>' });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

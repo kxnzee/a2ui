@@ -7,6 +7,7 @@ export type A2uiErrorCode =
   | 'unterminated-block' // стрим закончился до закрывающего тега
   | 'stream-ended' // push после finish/cancel
   | 'too-many-surfaces' // превышен maxSurfaces
+  | 'unknown-catalog' // createSurface с каталогом, который не подключён (рассинхрон агента и фронта)
   | 'action-failed' // onAction завершился ошибкой
   | 'disposed'; // хук уже размонтирован
 

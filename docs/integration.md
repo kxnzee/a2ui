@@ -119,7 +119,7 @@ npm run export:agent
 
 Перенесите **весь `dist/agent`** в контур. Основные файлы: catalogSchema.json, catalog.json, protocolSchema.json, capabilities.json, instructions.txt, examples.json. Рядом скопированы оригинальные JSON-схемы из установленного SDK, включая common_types.json, для локального разрешения $ref. Backend читает эти файлы как данные; npm и React ему не нужны. URI catalogId идентифицирует каталог, но не требует запроса в интернет. Конфигурацию обновляйте вместе с версией фронта. capabilities содержит поддерживаемый catalogId; inline-каталог передаётся отдельно в catalogSchema.json. getAgentConfiguration возвращает независимые копии схем.
 
-catalog.json генерируется из того же inline-каталога и добавляет определения anyComponent, anyFunction и theme для стандартных ссылок протокола. В JSON Schema resolver зарегистрируйте локальные файлы по их $id, включая catalog.json под https://a2ui.org/specification/v0_9/catalog.json. Этот $id — адрес подключения схемы; идентификатор самого UI-каталога остаётся urn:kxnzee:a2ui:cards:v2. Сетевые запросы для разрешения ссылок не нужны. Meta-schema Draft 2020-12 предоставляет ваш JSON Schema валидатор. После успешного формирования конфигурации export:agent очищает ранее сгенерированный dist/agent, чтобы старые схемы не оставались в комплекте.
+catalog.json генерируется из того же inline-каталога и добавляет определения anyComponent, anyFunction и theme для стандартных ссылок протокола. В JSON Schema resolver зарегистрируйте локальные файлы по их $id, включая catalog.json под https://a2ui.org/specification/v0_9/catalog.json. Этот $id — адрес подключения схемы; идентификатор самого UI-каталога остаётся urn:a2ui:cards:v1. Сетевые запросы для разрешения ссылок не нужны. Meta-schema Draft 2020-12 предоставляет ваш JSON Schema валидатор. После успешного формирования конфигурации export:agent очищает ранее сгенерированный dist/agent, чтобы старые схемы не оставались в комплекте.
 
 ## Ответ агента
 
@@ -127,7 +127,7 @@ catalog.json генерируется из того же inline-каталога
 
 ```text
 Вот показатель.
-<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:kxnzee:a2ui:cards:v2"}}</a2ui>
+<a2ui>{"version":"v0.9","createSurface":{"surfaceId":"result","catalogId":"urn:a2ui:cards:v1"}}</a2ui>
 <a2ui>{"version":"v0.9","updateComponents":{"surfaceId":"result","components":[{"id":"root","component":"MetricCard","title":"Выручка","value":1250000,"unit":"₽"}]}}</a2ui>
 ```
 
@@ -140,7 +140,7 @@ catalog.json генерируется из того же inline-каталога
     "version": "v0.9",
     "createSurface": {
       "surfaceId": "question",
-      "catalogId": "urn:kxnzee:a2ui:cards:v2"
+      "catalogId": "urn:a2ui:cards:v1"
     }
   },
   {
@@ -235,7 +235,6 @@ src/demo и src/example нужны для проверки и знакомств
     "@a2ui/react": "0.9.1",
     "@a2ui/web_core": "0.11.0",
     "antd": "5.22.5",
-    "zod": "4.6.5",
     "zod-a2ui": "npm:zod@3.25.76"
   },
   "overrides": {
@@ -244,7 +243,7 @@ src/demo и src/example нужны для проверки и знакомств
 }
 ```
 
-Добавьте эти записи в корневой package.json, сохранив свои React/ReactDOM и остальные зависимости. npm ci использует lockfile проекта; при первом подключении обновите свой lockfile через npm install. Во внутреннем registry/кэше подготовьте также Zod 3.25.76 — он требуется SDK и alias каталога. Каталог импортирует z из zod-a2ui; основной Zod 4.6.5 остаётся доступен приложению.
+Запись `antd` нужна только для готовых карточек (`cards.tsx`); для своего каталога на другой дизайн-системе её не добавляйте. Основной Zod 4 модуль не использует. Добавьте эти записи в корневой package.json, сохранив свои React/ReactDOM и остальные зависимости. npm ci использует lockfile проекта; при первом подключении обновите свой lockfile через npm install. Во внутреннем registry/кэше подготовьте также Zod 3.25.76 — он требуется SDK и alias каталога. Каталоги импортируют z из zod-a2ui; основной Zod приложения остаётся независимым.
 
 В web_core 0.11 нативный processMessages принимает массив: processMessages([message]) для одного сообщения. Поверхности доступны через processor.model.getSurface и processor.model.surfacesMap, cleanup выполняет processor.model.dispose. Схема каталога экспортируется нативным getClientCapabilities, инструкции модели передаются вместе с каталогом (`{catalog, instructions}`).
 

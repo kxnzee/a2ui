@@ -1,5 +1,5 @@
 {
-  "name": "@kxnzee/a2ui-clarification-ui",
+  "name": "a2ui-clarification-ui",
   "version": "0.6.0",
   "private": true,
   "description": "React + Ant Design clarification and metric cards for an existing streamed agent integration",
@@ -41,7 +41,6 @@
     "@a2ui/react": "0.9.1",
     "@a2ui/web_core": "0.11.0",
     "antd": "5.22.5",
-    "zod": "4.6.5",
     "zod-a2ui": "npm:zod@3.25.76"
   },
   "peerDependencies": {

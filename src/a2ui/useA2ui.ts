@@ -62,6 +62,9 @@ export function useA2ui({
     const decoder = createA2uiStream({
       ...options, framing: framingRef.current, maxBlockLength: maxBlockRef.current,
       onMessage: message => {
+        if ('createSurface' in message && !catalogs.some(c => c.id === message.createSurface.catalogId)) {
+          throw new A2uiError('unknown-catalog', `Каталог ${message.createSurface.catalogId} не подключён; доступны: ${catalogs.map(c => c.id).join(', ')}`);
+        }
         if ('createSurface' in message && processor.model.surfacesMap.size >= maxSurfacesRef.current) {
           throw new A2uiError('too-many-surfaces', `Слишком много поверхностей A2UI (максимум ${maxSurfacesRef.current})`);
         }
