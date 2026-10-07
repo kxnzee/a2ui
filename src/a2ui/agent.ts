@@ -43,3 +43,29 @@ ${instructions}`,
     processor.model.dispose();
   }
 }
+
+type AgentConfiguration = ReturnType<typeof getAgentConfiguration>;
+
+// В схемах протокола catalog.json — стандартная точка подключения каталога.
+// Inline-каталог SDK не содержит $defs, поэтому строим схему для этих ссылок.
+export function buildCatalogSchema(config: Pick<AgentConfiguration, 'catalogSchema' | 'protocolSchema'>) {
+  const functions = Object.fromEntries((config.catalogSchema.functions ?? []).map(fn => [fn.name, {
+    type: 'object',
+    description: fn.description,
+    properties: { call: { const: fn.name }, args: fn.parameters, returnType: { const: fn.returnType } },
+    required: ['call', 'args'],
+    unevaluatedProperties: false,
+  }]));
+  return {
+    $schema: config.protocolSchema.$schema,
+    $id: new URL('catalog.json', config.protocolSchema.$id).href,
+    catalogId: config.catalogSchema.catalogId,
+    components: config.catalogSchema.components,
+    functions,
+    $defs: {
+      anyComponent: { oneOf: Object.keys(config.catalogSchema.components ?? {}).map(name => ({ $ref: `#/components/${name}` })) },
+      anyFunction: Object.keys(functions).length ? { oneOf: Object.keys(functions).map(name => ({ $ref: `#/functions/${name}` })) } : false,
+      theme: { type: 'object', properties: config.catalogSchema.theme ?? {}, additionalProperties: false },
+    },
+  };
+}

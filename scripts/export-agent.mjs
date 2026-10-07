@@ -1,29 +1,23 @@
 import { mkdir, writeFile, readdir, copyFile, rm } from 'node:fs/promises';
-import { getAgentConfiguration } from '../src/a2ui/agent.ts';
-import { cards } from '../src/a2ui/cards.tsx';
-import { getDemoMessages } from '../src/demo/messages.ts';
-const config = { ...getAgentConfiguration(cards), examples: getDemoMessages() };
-// В схемах протокола catalog.json — стандартная точка подключения каталога.
-// Inline-каталог SDK не содержит $defs, поэтому создаём схему для этих ссылок.
-const functions = Object.fromEntries((config.catalogSchema.functions ?? []).map(fn => [fn.name, {
-  type: 'object',
-  description: fn.description,
-  properties: { call: { const: fn.name }, args: fn.parameters, returnType: { const: fn.returnType } },
-  required: ['call', 'args'],
-  unevaluatedProperties: false,
-}]));
-const catalog = {
-  $schema: config.protocolSchema.$schema,
-  $id: new URL('catalog.json', config.protocolSchema.$id).href,
-  catalogId: config.catalogSchema.catalogId,
-  components: config.catalogSchema.components,
-  functions,
-  $defs: {
-    anyComponent: { oneOf: Object.keys(config.catalogSchema.components ?? {}).map(name => ({ $ref: `#/components/${name}` })) },
-    anyFunction: Object.keys(functions).length ? { oneOf: Object.keys(functions).map(name => ({ $ref: `#/functions/${name}` })) } : false,
-    theme: { type: 'object', properties: config.catalogSchema.theme ?? {}, additionalProperties: false },
-  },
-};
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { getAgentConfiguration, buildCatalogSchema } from '../src/a2ui/agent.ts';
+
+// Экспорт конфигурации агента в dist/agent.
+//   node --import tsx scripts/export-agent.mjs [--kit <модуль>] [--examples <модуль>]
+// --kit: модуль, экспортирующий `kit` (или default, или `cards`) вида {catalog, instructions};
+// --examples: модуль с `examples` (или default) — объект либо функция с примерами сообщений.
+// Без аргументов экспортируются встроенные карточки и демо-примеры.
+const option = name => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
+const load = (value, fallback) => import(value ? pathToFileURL(resolve(value)).href : new URL(fallback, import.meta.url).href);
+const kitModule = await load(option('--kit'), '../src/a2ui/cards.tsx');
+const kit = kitModule.kit ?? kitModule.default ?? kitModule.cards;
+if (!kit?.catalog) throw new Error('--kit: модуль должен экспортировать {catalog, instructions} как kit, default или cards');
+const examplesModule = await load(option('--examples'), '../src/demo/messages.ts');
+const rawExamples = examplesModule.examples ?? examplesModule.default ?? examplesModule.getDemoMessages;
+const examples = typeof rawExamples === 'function' ? rawExamples() : rawExamples ?? {};
+const config = { ...getAgentConfiguration(kit), examples };
+const catalog = buildCatalogSchema(config);
 await rm('dist/agent', { recursive: true, force: true });
 await mkdir('dist/agent', { recursive: true });
 for (const [name, value] of Object.entries(config)) {
