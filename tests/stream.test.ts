@@ -166,7 +166,7 @@ test('cancel from onError during finish stops further output', () => {
 
 test('oversized block with an unterminated string does not swallow the rest of the response', () => {
   const source = `До<a2ui>{"v":"${'x'.repeat(33000)}</a2ui>После${frame(metrics)}`;
-  for (const size of [1000, 7777, source.length]) {
+  for (const size of [1, 3, 1000, 7777, source.length]) {
     const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
     const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
     for (let i = 0; i < source.length; i += size) s.push(source.slice(i, i + size));
@@ -193,4 +193,15 @@ test('errors carry stable codes', () => {
   s.push(`<a2ui>{</a2ui>${frame([metrics[0]])}<a2ui>${'x'.repeat(400)}</a2ui><a2ui>{`); s.finish();
   assert.throws(() => s.push('x'), (e: any) => e.code === 'stream-ended');
   assert.deepEqual(codes, ['invalid-block', 'message-rejected', 'block-too-large', 'unterminated-block']);
+});
+
+test('corrupt oversized block recovers when the closing tag is split at every position', () => {
+  const head = `До<a2ui>{"v":"${'x'.repeat(33000)}`;
+  const tail = `</a2ui>После${frame(metrics)}`;
+  for (let cut = 0; cut <= '</a2ui>'.length; cut++) {
+    const texts: string[] = []; const messages: unknown[] = []; const errors: Error[] = [];
+    const s = createA2uiStream({ onText: t => texts.push(t), onMessage: m => messages.push(m), onError: e => errors.push(e) });
+    s.push(head + tail.slice(0, cut)); s.push(tail.slice(cut)); s.finish();
+    assert.equal(texts.join(''), 'ДоПосле'); assert.deepEqual(messages, metrics); assert.equal(errors.length, 1);
+  }
 });

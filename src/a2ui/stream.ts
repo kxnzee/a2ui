@@ -64,8 +64,12 @@ export function createA2uiStream(options: StreamOptions) {
       else if (skipString) {
         if (char === '\\') skipEscaped = true;
         else if (char === '"') skipString = false;
-        else if (char === CLOSE[0] && held === undefined && buffer.startsWith(CLOSE, i)) {
-          held = buffer.slice(i + CLOSE.length);
+        else if (char === CLOSE[0] && held === undefined) {
+          if (buffer.startsWith(CLOSE, i)) held = buffer.slice(i + CLOSE.length);
+          else if (CLOSE.startsWith(buffer.slice(i))) {
+            buffer = buffer.slice(i); // тег может быть разорван границей чанков
+            return false;
+          }
         }
       } else if (char === '"') skipString = true;
       else if (char === CLOSE[0] && buffer.startsWith(CLOSE, i)) {
