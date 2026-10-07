@@ -235,7 +235,6 @@ src/demo и src/example нужны для проверки и знакомств
     "@a2ui/react": "0.9.1",
     "@a2ui/web_core": "0.11.0",
     "antd": "5.22.5",
-    "zod": "4.6.5",
     "zod-a2ui": "npm:zod@3.25.76"
   },
   "overrides": {
@@ -244,7 +243,7 @@ src/demo и src/example нужны для проверки и знакомств
 }
 ```
 
-Добавьте эти записи в корневой package.json, сохранив свои React/ReactDOM и остальные зависимости. npm ci использует lockfile проекта; при первом подключении обновите свой lockfile через npm install. Во внутреннем registry/кэше подготовьте также Zod 3.25.76 — он требуется SDK и alias каталога. Каталог импортирует z из zod-a2ui; основной Zod 4.6.5 остаётся доступен приложению.
+Запись `antd` нужна только для готовых карточек (`cards.tsx`); для своего каталога на другой дизайн-системе её не добавляйте. Основной Zod 4 модуль не использует. Добавьте эти записи в корневой package.json, сохранив свои React/ReactDOM и остальные зависимости. npm ci использует lockfile проекта; при первом подключении обновите свой lockfile через npm install. Во внутреннем registry/кэше подготовьте также Zod 3.25.76 — он требуется SDK и alias каталога. Каталоги импортируют z из zod-a2ui; основной Zod приложения остаётся независимым.
 
 В web_core 0.11 нативный processMessages принимает массив: processMessages([message]) для одного сообщения. Поверхности доступны через processor.model.getSurface и processor.model.surfacesMap, cleanup выполняет processor.model.dispose. Схема каталога экспортируется нативным getClientCapabilities, инструкции модели передаются вместе с каталогом (`{catalog, instructions}`).
 

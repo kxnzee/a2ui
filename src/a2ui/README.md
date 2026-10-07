@@ -2,9 +2,9 @@
 
 Протокол: A2UI v0.9. Каталог: `urn:a2ui:cards:v1`.
 
-**Перед копированием добавьте в свой package.json alias `zod-a2ui` и `overrides` для `@a2ui/web_core` ([docs/integration.md](../../docs/integration.md#зависимости-в-приложении)): без них catalog.tsx не соберётся, а SDK получит две копии ядра.**
+**Перед копированием добавьте в свой package.json `overrides` для `@a2ui/web_core` и, для описания каталога (в том числе своего), alias `zod-a2ui` ([docs/integration.md](../../docs/integration.md#зависимости-в-приложении)): без override SDK получит две копии ядра, без alias не соберётся схема каталога.**
 
-Копируйте весь `src/a2ui` в своё React-приложение. Основные зависимости: `@a2ui/react` 0.9.1, `@a2ui/web_core` 0.11.0, Zod 4.6.5, AntD 5.22.5, React/ReactDOM 18.2 или 19. Каталог A2UI использует отдельный alias `zod-a2ui` → Zod 3.25.76, необходимый для API этих версий SDK.
+Копируйте весь `src/a2ui` в своё React-приложение. Универсальному слою (всё, кроме `cards.tsx`) нужны `@a2ui/react` 0.9.1, `@a2ui/web_core` 0.11.0 и React/ReactDOM 18.2 или 19; AntD ему не нужен. Схемы каталога (ваши и в `cards.tsx`) пишутся на Zod 3.25.76 через alias `zod-a2ui`, необходимый для API этих версий SDK. AntD 5.22.5 требуется только для `cards.tsx`. Основной Zod 4 модуль не использует.
 
 | Файл | Назначение |
 | --- | --- |
@@ -126,7 +126,6 @@ processor.model.dispose();
     "@a2ui/react": "0.9.1",
     "@a2ui/web_core": "0.11.0",
     "antd": "5.22.5",
-    "zod": "4.6.5",
     "zod-a2ui": "npm:zod@3.25.76"
   },
   "overrides": {
@@ -135,4 +134,4 @@ processor.model.dispose();
 }
 ```
 
-Объедините эти записи со своим корневым package.json и обновите lockfile. Override закрепляет единую копию ядра для renderer и приложения; npm не наследует overrides из зависимого npm-пакета. Во внутреннем registry/кэше понадобятся оба пакета Zod: основной 4.6.5 и Zod 3.25.76 для SDK/alias. Для Ant Design 5 используются Space.direction и Alert.message.
+Объедините эти записи со своим корневым package.json и обновите lockfile. Override закрепляет единую копию ядра для renderer и приложения; npm не наследует overrides из зависимого npm-пакета. Во внутреннем registry/кэше понадобится Zod 3.25.76 для SDK и alias. Для Ant Design 5 используются Space.direction и Alert.message.
