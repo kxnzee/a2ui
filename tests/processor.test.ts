@@ -131,6 +131,8 @@ test('core works with a custom catalog and does not know the bundled cards', asy
   assert.doesNotMatch(config.instructions, /ClarificationCard/);
   const custom = getAgentConfiguration({ catalog, instructions: 'x' }, { framing: { open: '[[ui]]', close: '[[/ui]]' } });
   assert.match(custom.instructions, /\[\[ui\]\]JSON\[\[\/ui\]\]/);
+  assert.deepEqual(custom.framing, { open: '[[ui]]', close: '[[/ui]]' });
+  assert.deepEqual(getAgentConfiguration({ catalog, instructions: 'x' }).framing, { open: '<a2ui>', close: '</a2ui>' });
   assert.equal(getAgentConfiguration({ catalog, instructions: 'x' }, { protocolInstructions: 'Свой текст' }).instructions, 'Свой текст\nx');
   processor.model.dispose();
 });

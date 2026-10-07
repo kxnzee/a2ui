@@ -33,6 +33,9 @@ export function getAgentConfiguration(
       capabilities,
       catalogSchema,
       protocolSchema: Schemas.A2uiMessageSchemaRaw,
+      // Теги, которыми агент должен обрамлять сообщения: бэкенд читает их отсюда,
+      // а фронт передаёт тот же объект в useA2ui({ framing }).
+      framing,
       instructions: `${protocolInstructions}
 ${instructions}`,
     });

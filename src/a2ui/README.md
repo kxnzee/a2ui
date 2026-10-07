@@ -91,7 +91,9 @@ getAgentConfiguration(badges);                       // схемы и промп
 getAgentConfiguration(badges, { framing, protocolInstructions }); // свои теги и текст промпта
 ```
 
-Ошибки — `A2uiError` с полем `code` (`block-too-large`, `invalid-block`, `message-rejected`, `unterminated-block`, `stream-ended`, `too-many-surfaces`, `action-failed`, `disposed`): текст для пользователя выбирает приложение. Для транспорта без текстового обрамления используйте `processor.processMessages` напрямую. `clear(surfaceIds?)` удаляет все поверхности processor либо только указанные.
+Теги обрамления должны совпадать у агента и фронта, иначе блоки молча станут обычным текстом. Заведите одну константу `const framing = { open: '[[ui]]', close: '[[/ui]]' }` и передайте её и в `useA2ui({ framing })`, и в `getAgentConfiguration(kit, { framing })`; конфигурация также отдаёт её в поле `framing` (в `dist/agent` — `framing.json`).
+
+Ошибки — `A2uiError` с полем `code` (`block-too-large`, `invalid-block`, `message-rejected`, `unterminated-block`, `stream-ended`, `too-many-surfaces`, `unknown-catalog`, `action-failed`, `disposed`): текст для пользователя выбирает приложение. Для транспорта без текстового обрамления используйте `processor.processMessages` напрямую. `clear(surfaceIds?)` удаляет все поверхности processor либо только указанные.
 
 ## Изменение API в 0.6
 
